@@ -107,6 +107,12 @@ en memoria, sin cambiar la lógica del juego:
 - **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
   entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.
 
+- **Pantalla panorámica (experimental):** la partida planetaria a la resolución que elijas (por ejemplo
+  1920×1080) en lugar de 1024×768, con mucho más mapa a la vista. Se activa al instalar con
+  `--res 1920x1080` (Linux) o `-Res 1920x1080` (Windows) y se desactiva con `off`. El ancho tiene que ser
+  múltiplo de 8 (1366×768 no; 1360×768 sí). Por ahora el mapa estelar (parte espacial) sigue en 1024×768
+  y el minimapa no está probado. Si algo se ve mal, volvé con `--res off`.
+
 Viene compilado en **SpaceClashEnhanced.zip**; si instalás desde una copia del repositorio, el instalador
 de Linux lo compila solo si tenés MinGW (`sudo pacman -S mingw-w64-gcc`).
 
@@ -229,6 +235,7 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 | Vídeos escalados con IA (opcional) | ✅ | ⏳ |
 | Guardar/cargar | ✅ | ⏳ |
 | Velocidad con +/− y menos CPU (`scenh.dll`) | ✅ | ⏳ |
+| Pantalla panorámica en la parte planetaria (experimental, `--res`) | 🟡 | ⏳ |
 | Multijugador LAN | ⏳ | ⏳ |
 
 ## Créditos y aviso legal

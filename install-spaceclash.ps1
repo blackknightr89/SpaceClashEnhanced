@@ -64,6 +64,9 @@ param(
     [string]$Python = '',
     # Sin el runtime de mejoras scenh.dll (velocidad con + y -, menos consumo de CPU, avisos en pantalla)
     [switch]$NoRuntime,
+    # EXPERIMENTAL: partida planetaria en WxH (p. ej. 1920x1080) en lugar de 1024x768, con más mapa
+    # visible (requiere el runtime). 'off' la desactiva; vacío = no tocar
+    [string]$Res = '',
     [switch]$NoShortcut,
     [switch]$SkipHash,
     [switch]$SkipDirectPlay,
@@ -408,6 +411,30 @@ function Set-ImportName([string]$Name) {   # GDI32.dll (original) o SCENH.dll (r
     return $true
 }
 
+function Test-Res {   # valida -Res antes de empezar a instalar; devuelve @(ancho, alto) o $null
+    if (-not $Res -or $Res -eq 'off') { return $null }
+    if ($Res -notmatch '^(\d+)x(\d+)$') { Fail "-Res inválido: $Res (p. ej. 1920x1080, u off)" }
+    $w = [int]$Matches[1]; $h = [int]$Matches[2]
+    if ($w -lt 1024 -or $w -gt 2560 -or ($w % 8) -ne 0 -or $h -lt 600 -or $h -gt 1600 -or ($w * $h) -lt (1024 * 768)) {
+        Fail "-Res $Res fuera de rango: ancho 1024-2560 (múltiplo de 8), alto 600-1600, área >= 1024x768"
+    }
+    return @($w, $h)
+}
+
+function Set-ScenhKey([string]$Ini, [string]$Section, [string]$Key, [string]$Value) {
+    $utf8 = New-Object System.Text.UTF8Encoding $false   # sin BOM: lo lee GetPrivateProfileInt
+    $lines = [System.Collections.Generic.List[string]]@([System.IO.File]::ReadAllLines($Ini, $utf8))
+    $start = $lines.IndexOf("[$Section]")
+    if ($start -lt 0) { $lines.Add(''); $lines.Add("[$Section]"); $start = $lines.Count - 1 }
+    $i = $start + 1
+    while ($i -lt $lines.Count -and -not $lines[$i].StartsWith('[')) {
+        if ($lines[$i].StartsWith("$Key=")) { $lines[$i] = "$Key=$Value"; [System.IO.File]::WriteAllLines($Ini, $lines, $utf8); return }
+        $i++
+    }
+    $lines.Insert($start + 1, "$Key=$Value")
+    [System.IO.File]::WriteAllLines($Ini, $lines, $utf8)
+}
+
 function Install-Runtime {
     if ($NoRuntime) {
         Set-ImportName 'GDI32.dll' | Out-Null
@@ -423,6 +450,16 @@ function Install-Runtime {
     $ini = Join-Path $GameDir 'scenh.ini'
     if (-not (Test-Path $ini)) { Copy-Item (Join-Path $ScriptDir 'runtime\scenh.ini') $ini }
     if (-not (Set-ImportName 'SCENH.dll')) { Set-ImportName 'GDI32.dll' | Out-Null; return }
+    if ($Res -eq 'off') {
+        Set-ScenhKey $ini 'resolucion' 'activar' '0'; Write-Ok 'Resolución panorámica desactivada'
+    } elseif ($Res) {
+        $wh = Test-Res
+        Set-ScenhKey $ini 'resolucion' 'activar' '1'
+        Set-ScenhKey $ini 'resolucion' 'ancho' "$($wh[0])"
+        Set-ScenhKey $ini 'resolucion' 'alto' "$($wh[1])"
+        $script:GameRes = '1024'   # la resolución panorámica reemplaza al modo 1024 del juego
+        Write-Ok "Resolución panorámica (experimental, parte planetaria): $Res"
+    }
     Write-Ok "Runtime de mejoras instalado: velocidad con + y - durante la partida (opciones en $ini)"
 }
 
@@ -909,6 +946,7 @@ function Invoke-Install {
         Fail 'El juego está abierto. Cerralo antes de instalar/actualizar.'
     }
     Write-Step "Instalando Space Clash en $InstallDir"
+    Test-Res | Out-Null
     Test-Requirements
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Expand-GameImage

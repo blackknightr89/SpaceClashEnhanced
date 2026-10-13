@@ -30,6 +30,7 @@ SC_SCALING="${SC_SCALING:-fit}"                         # scaled: fit (llenar el
 SC_FILTER="${SC_FILTER:-auto}"                          # scaled+opengl: auto | nearest | sharp | smooth | xbr | crt
 SC_GAME_RES="${SC_GAME_RES:-auto}"                      # resolución del juego (CLASH.CFG): auto (1024 al instalar de cero, si no keep) | keep | 640 | 800 | 1024
 SC_PATCH="${SC_PATCH:-1}"                               # 1 = aplicar parches de compatibilidad (ver sección 5b)
+SC_RES="${SC_RES:-}"                                    # resolución panorámica (experimental) WxH, "off" o vacío = no tocar
 SC_RUNTIME="${SC_RUNTIME:-1}"                           # 1 = runtime de mejoras scenh.dll (velocidad, avisos…; sección 5c)
 SC_VDESKTOP="${SC_VDESKTOP:-1}"                         # 1 = ejecutar en escritorio virtual de Wine
 SC_VDESKTOP_RES="${SC_VDESKTOP_RES:-auto}"              # tamaño del escritorio virtual (auto = monitor en scaled, 1024x768 en window)
@@ -392,6 +393,39 @@ set_import_name() {   # set_import_name NOMBRE: GDI32.dll (original) o SCENH.dll
     done
 }
 
+ini_section_set() {   # ini_section_set ARCHIVO SECCIÓN CLAVE VALOR (crea la sección o la clave si faltan)
+    local f=$1 sec=$2 key=$3 val=$4
+    grep -q "^\[$sec\]" "$f" || printf '\n[%s]\n' "$sec" >>"$f"
+    if awk -v s="[$sec]" -v k="$key" '$0==s{f=1;next} /^\[/{f=0} f&&index($0,k"=")==1{found=1} END{exit !found}' "$f"; then
+        sed -i "/^\[$sec\]/,/^\[/ s|^$key=.*|$key=$val|" "$f"
+    else
+        sed -i "/^\[$sec\]/a $key=$val" "$f"
+    fi
+}
+
+check_res() {   # valida --res antes de empezar a instalar
+    [[ -z "$SC_RES" || "$SC_RES" == off ]] && return 0
+    [[ "$SC_RES" =~ ^([0-9]+)x([0-9]+)$ ]] || die "--res inválido: $SC_RES (p. ej. 1920x1080, u off)"
+    local w=${BASH_REMATCH[1]} h=${BASH_REMATCH[2]}
+    (( w >= 1024 && w <= 2560 && w % 8 == 0 && h >= 600 && h <= 1600 && w * h >= 1024 * 768 )) \
+        || die "--res $SC_RES fuera de rango: ancho 1024–2560 (múltiplo de 8), alto 600–1600, área ≥ 1024x768"
+}
+
+set_runtime_res() {   # --res WxH: modo 1024 del juego → WxH (scenh.ini [resolucion]); --res off lo desactiva
+    local ini="$GAME_DIR/scenh.ini" w h
+    [[ -z "$SC_RES" ]] && return
+    if [[ "$SC_RES" == off ]]; then
+        ini_section_set "$ini" resolucion activar 0; ok "Resolución panorámica desactivada"; return
+    fi
+    check_res
+    w=${SC_RES%x*}; h=${SC_RES#*x}
+    ini_section_set "$ini" resolucion activar 1
+    ini_section_set "$ini" resolucion ancho "$w"
+    ini_section_set "$ini" resolucion alto "$h"
+    SC_GAME_RES=1024   # la resolución panorámica reemplaza al modo 1024 del juego
+    ok "Resolución panorámica (experimental, parte planetaria): ${w}x${h}"
+}
+
 find_runtime_dll() {   # imprime la ruta de scenh.dll: la del ZIP del release o la compilada aquí
     local f
     for f in "$SCRIPT_DIR/runtime/scenh.dll" "$SCRIPT_DIR/runtime/build/scenh.dll"; do
@@ -421,6 +455,7 @@ setup_runtime() {
         cp "$SCRIPT_DIR/runtime/scenh.ini" "$GAME_DIR/scenh.ini"
     fi
     set_import_name SCENH.dll || { set_import_name GDI32.dll; return; }
+    set_runtime_res
     ok "Runtime de mejoras instalado: velocidad con + y - durante la partida (opciones en $GAME_DIR/scenh.ini)"
 }
 
@@ -863,6 +898,7 @@ cmd_install() {
     [[ "$SC_FILTER" =~ ^(auto|nearest|sharp|smooth|xbr|crt)$ ]] || die "SC_FILTER inválido: $SC_FILTER (auto|nearest|sharp|smooth|xbr|crt)"
     [[ "$SC_GAME_RES" =~ ^(auto|keep|640|800|1024)$ ]] || die "SC_GAME_RES inválido: $SC_GAME_RES (auto|keep|640|800|1024)"
     log "Instalando Space Clash en $SC_ROOT"
+    check_res
     check_deps
     if [[ -f "$CD_DIR/UNCLASH.EXE" && "${FORCE:-0}" != 1 ]]; then
         ok "CD ya extraído en $CD_DIR (no hace falta la imagen)"
@@ -923,6 +959,8 @@ cmd_doctor() {
         done
         if ((rt)); then
             ok "Runtime de mejoras activo (scenh.dll; opciones en scenh.ini$([[ -f "$GAME_DIR/scenh.log" ]] && echo '; registro en scenh.log'))"
+            local res; res=$(awk -F= '/^\[/{f=($0=="[resolucion]")} f&&$1=="activar"{a=$2} f&&$1=="ancho"{w=$2} f&&$1=="alto"{h=$2} END{if(a==1)print w"x"h}' "$GAME_DIR/scenh.ini")
+            [[ -n "$res" ]] && echo "    Resolución panorámica (experimental): $res en lugar de 1024x768"
         else
             echo "    Runtime de mejoras: no instalado (ver --no-runtime en la ayuda)"
         fi
@@ -1007,6 +1045,8 @@ Opciones (o variables de entorno equivalentes):
                       = 1024 en una instalación nueva; al reinstalar se conserva la elegida)
                       1024 = más área del mapa visible
   --no-patch          No aplicar el parche de compatibilidad (SC_PATCH=0)
+  --res WxH|off       EXPERIMENTAL: partida planetaria en WxH (p. ej. 1920x1080) en lugar de 1024x768,
+                      con más mapa visible; requiere el runtime (SC_RES)
   --no-runtime        Sin el runtime de mejoras scenh.dll (velocidad con +/-, menos CPU) (SC_RUNTIME=0)
   --no-vdesktop       Sin escritorio virtual de Wine      (SC_VDESKTOP=0)
   --vdesktop-res WxH  Tamaño del escritorio virtual       (SC_VDESKTOP_RES, def: auto)
@@ -1047,6 +1087,7 @@ while (($#)); do
         --cd-letter)    SC_CD_LETTER=$2; shift ;;
         --no-patch)     SC_PATCH=0 ;;
         --no-runtime)   SC_RUNTIME=0 ;;
+        --res)          SC_RES=$2; shift ;;
         --no-vdesktop)  SC_VDESKTOP=0 ;;
         --vdesktop-res) SC_VDESKTOP_RES=$2; shift ;;
         --gamescope)    SC_GAMESCOPE=1 ;;

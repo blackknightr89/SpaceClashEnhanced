@@ -52,4 +52,7 @@ BOOL WINAPI hk_PeekMessageA(LPMSG, HWND, UINT, UINT, UINT);
 void osd_init(void);
 void osd_show(const char *text, DWORD ms);
 
+/* resolution.c */
+void resolution_init(void);
+
 #endif
