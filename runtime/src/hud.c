@@ -67,7 +67,7 @@ static int g_mouse_shifted, g_mouse_value;
 
 int hud_offset(int screen_w)
 {
-    return g_on && screen_w == g_wide_w && screen_w > 1024 ? (screen_w - 1024) / 2 : 0;
+    return g_on && screen_w > 1024 ? (screen_w - 1024) / 2 : 0;   /* el modo 3 con un ancho > 1024 */
 }
 
 static int active_dx(void)

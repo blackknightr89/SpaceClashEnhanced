@@ -10,6 +10,7 @@
 #include <string.h>
 
 static char g_text[48];
+static int g_avisos;
 static DWORD g_until;
 
 /* 5×7: cada carácter son 7 filas de 5 bits (bit 4 = columna izquierda). */
@@ -93,6 +94,7 @@ static void draw(uint8_t *px, int pitch, int w, int h)
 static void osd_flip(void)
 {
     import_hooks_refresh();
+    zoom_before_flip();   /* zoom por software: escalar el back buffer a la pantalla real */
     IDirectDrawSurface *primary = *(IDirectDrawSurface **)g_game->dds_primary;
     IDirectDrawSurface *back = *(IDirectDrawSurface **)g_game->dds_back;
     if (g_text[0] && back) {
@@ -117,8 +119,9 @@ static void osd_flip(void)
 
 void osd_init(void)
 {
-    if (!cfg_int("general", "avisos", 1))
-        return;
+    g_avisos = cfg_int("general", "avisos", 1);
+    if (!g_avisos && !(g_game->kind == EXE_CLASH && cfg_int("zoom", "activar", 1)))
+        return;   /* el Flip propio también lo necesita el zoom (zoom_before_flip) */
     /* mov eax,[primaria]; push 0; push 0 */
     uint8_t expected[9] = {0xA1, 0, 0, 0, 0, 0x6A, 0x00, 0x6A, 0x00};
     memcpy(expected + 1, &g_game->dds_primary, 4);
@@ -127,6 +130,8 @@ void osd_init(void)
 
 void osd_show(const char *text, DWORD ms)
 {
+    if (!g_avisos)
+        return;
     lstrcpynA(g_text, text, sizeof g_text);
     g_until = GetTickCount() + ms;
 }
