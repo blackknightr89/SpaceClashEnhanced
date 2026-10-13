@@ -427,15 +427,17 @@ set_runtime_res() {   # --res WxH: modo 1024 del juego → WxH (scenh.ini [resol
     ok "Resolución panorámica (experimental): ${w}x${h}"
 }
 
-find_runtime_dll() {   # imprime la ruta de scenh.dll: la del ZIP del release o la compilada aquí
+find_runtime_dll() {   # imprime la ruta de scenh.dll: la compilada aquí (si hay MinGW) o la del ZIP
+    # Con MinGW se compila siempre (make solo rehace lo que cambió): así una copia del repositorio no
+    # instala una DLL vieja de runtime/build/ cuando el código es más nuevo.
+    if [[ -f "$SCRIPT_DIR/runtime/Makefile" ]] && have make && have i686-w64-mingw32-gcc \
+       && make -s -C "$SCRIPT_DIR/runtime" >&2 && [[ -f "$SCRIPT_DIR/runtime/build/scenh.dll" ]]; then
+        echo "$SCRIPT_DIR/runtime/build/scenh.dll"; return
+    fi
     local f
     for f in "$SCRIPT_DIR/runtime/scenh.dll" "$SCRIPT_DIR/runtime/build/scenh.dll"; do
         [[ -f "$f" ]] && { echo "$f"; return; }
     done
-    if [[ -f "$SCRIPT_DIR/runtime/Makefile" ]] && have make && have i686-w64-mingw32-gcc; then
-        make -s -C "$SCRIPT_DIR/runtime" >&2 && [[ -f "$SCRIPT_DIR/runtime/build/scenh.dll" ]] \
-            && echo "$SCRIPT_DIR/runtime/build/scenh.dll"
-    fi
 }
 
 setup_runtime() {
