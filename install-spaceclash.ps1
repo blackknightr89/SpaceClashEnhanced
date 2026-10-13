@@ -64,9 +64,10 @@ param(
     [string]$Python = '',
     # Sin el runtime de mejoras scenh.dll (velocidad con + y -, menos consumo de CPU, avisos en pantalla)
     [switch]$NoRuntime,
-    # EXPERIMENTAL: partida en WxH (p. ej. 1920x1080) en lugar de 1024x768, con más mapa
-    # visible (requiere el runtime). 'off' la desactiva; vacío = no tocar
-    [string]$Res = '',
+    # Pantalla panorámica (experimental): la partida en WxH en lugar de 1024x768, con más mapa visible
+    # (requiere el runtime). auto = la del monitor en una instalación nueva (al reinstalar se conserva);
+    # off = 4:3 original; WxH = ese tamaño (p. ej. 1920x1080)
+    [string]$Res = 'auto',
     [switch]$NoShortcut,
     [switch]$SkipHash,
     [switch]$SkipDirectPlay,
@@ -411,8 +412,21 @@ function Set-ImportName([string]$Name) {   # GDI32.dll (original) o SCENH.dll (r
     return $true
 }
 
+function Get-FitRes([int]$MonW, [int]$MonH) {   # tamaño admitido más parecido (misma proporción) o $null
+    # (PowerShell no distingue mayúsculas en las variables: $w y $W serían la misma)
+    foreach ($k in 1, 2, 3, 4) {   # monitores grandes (4K, ultrawide): dividir por un entero → escalado nítido
+        $fw = [int][Math]::Floor($MonW / $k) -band -8
+        $fh = [int][Math]::Floor($fw * $MonH / $MonW + 1) -band -2
+        if ($fw -ge 1024 -and $fw -le 2560 -and $fh -ge 600 -and $fh -le 1600 -and ($fw * $fh) -ge (1024 * 768)) {
+            return '{0}x{1}' -f $fw, $fh
+        }
+        if ($fw -lt 1024) { return $null }
+    }
+    return $null
+}
+
 function Test-Res {   # valida -Res antes de empezar a instalar; devuelve @(ancho, alto) o $null
-    if (-not $Res -or $Res -eq 'off') { return $null }
+    if (-not $Res -or $Res -eq 'off' -or $Res -eq 'auto') { return $null }
     if ($Res -notmatch '^(\d+)x(\d+)$') { Fail "-Res inválido: $Res (p. ej. 1920x1080, u off)" }
     $w = [int]$Matches[1]; $h = [int]$Matches[2]
     if ($w -lt 1024 -or $w -gt 2560 -or ($w % 8) -ne 0 -or $h -lt 600 -or $h -gt 1600 -or ($w * $h) -lt (1024 * 768)) {
@@ -448,8 +462,21 @@ function Install-Runtime {
     }
     Copy-Item -Force $dll (Join-Path $GameDir 'scenh.dll')
     $ini = Join-Path $GameDir 'scenh.ini'
-    if (-not (Test-Path $ini)) { Copy-Item (Join-Path $ScriptDir 'runtime\scenh.ini') $ini }
+    $newIni = -not (Test-Path $ini)
+    if ($newIni) { Copy-Item (Join-Path $ScriptDir 'runtime\scenh.ini') $ini }
     if (-not (Set-ImportName 'SCENH.dll')) { Set-ImportName 'GDI32.dll' | Out-Null; return }
+    if ($Res -eq 'auto') {
+        # Solo en una instalación nueva y en modo Scaled; al reinstalar se respeta lo que haya en scenh.ini
+        if (-not $newIni -or $Display -ne 'Scaled') { return }
+        $mon = $null; try { $mon = Get-ScreenRes } catch { }
+        $fit = $null
+        if ($mon -match '^(\d+)x(\d+)$') { $fit = Get-FitRes ([int]$Matches[1]) ([int]$Matches[2]) }
+        if (-not $fit -or $fit -eq '1024x768') {
+            Write-Ok 'Pantalla: 1024x768 (no se detectó un monitor compatible con la pantalla panorámica)'
+            return
+        }
+        $script:Res = $fit
+    }
     if ($Res -eq 'off') {
         Set-ScenhKey $ini 'resolucion' 'activar' '0'; Write-Ok 'Resolución panorámica desactivada'
     } elseif ($Res) {

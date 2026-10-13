@@ -30,7 +30,7 @@ SC_SCALING="${SC_SCALING:-fit}"                         # scaled: fit (llenar el
 SC_FILTER="${SC_FILTER:-auto}"                          # scaled+opengl: auto | nearest | sharp | smooth | xbr | crt
 SC_GAME_RES="${SC_GAME_RES:-auto}"                      # resolución del juego (CLASH.CFG): auto (1024 al instalar de cero, si no keep) | keep | 640 | 800 | 1024
 SC_PATCH="${SC_PATCH:-1}"                               # 1 = aplicar parches de compatibilidad (ver sección 5b)
-SC_RES="${SC_RES:-}"                                    # resolución panorámica (experimental) WxH, "off" o vacío = no tocar
+SC_RES="${SC_RES:-auto}"                                # pantalla panorámica: auto (la del monitor al instalar de cero) | WxH | off
 SC_RUNTIME="${SC_RUNTIME:-1}"                           # 1 = runtime de mejoras scenh.dll (velocidad, avisos…; sección 5c)
 SC_VDESKTOP="${SC_VDESKTOP:-1}"                         # 1 = ejecutar en escritorio virtual de Wine
 SC_VDESKTOP_RES="${SC_VDESKTOP_RES:-auto}"              # tamaño del escritorio virtual (auto = monitor en scaled, 1024x768 en window)
@@ -404,8 +404,26 @@ ini_section_set() {   # ini_section_set ARCHIVO SECCIÓN CLAVE VALOR (crea la se
     fi
 }
 
+fit_res() {   # fit_res W H → imprime el tamaño admitido más parecido (misma proporción) o nada
+    local W=$1 H=$2 k w h
+    for k in 1 2 3 4; do   # monitores grandes (4K, ultrawide): dividir por un entero → escalado nítido
+        w=$(( (W / k) & ~7 ))
+        h=$(( (w * H / W + 1) & ~1 ))
+        if (( w >= 1024 && w <= 2560 && h >= 600 && h <= 1600 && w * h >= 1024 * 768 )); then
+            echo "${w}x${h}"; return
+        fi
+        (( w < 1024 )) && return
+    done
+}
+
+monitor_res() {   # resolución del monitor (o del escritorio virtual pedido con --vdesktop-res)
+    local r=$SC_VDESKTOP_RES
+    [[ "$r" == auto ]] && r=$(xrandr --current 2>/dev/null | awk '/\*/{print $1; exit}')
+    [[ "$r" =~ ^[0-9]+x[0-9]+$ ]] && echo "$r"
+}
+
 check_res() {   # valida --res antes de empezar a instalar
-    [[ -z "$SC_RES" || "$SC_RES" == off ]] && return 0
+    [[ -z "$SC_RES" || "$SC_RES" == off || "$SC_RES" == auto ]] && return 0
     [[ "$SC_RES" =~ ^([0-9]+)x([0-9]+)$ ]] || die "--res inválido: $SC_RES (p. ej. 1920x1080, u off)"
     local w=${BASH_REMATCH[1]} h=${BASH_REMATCH[2]}
     (( w >= 1024 && w <= 2560 && w % 8 == 0 && h >= 600 && h <= 1600 && w * h >= 1024 * 768 )) \
@@ -415,6 +433,19 @@ check_res() {   # valida --res antes de empezar a instalar
 set_runtime_res() {   # --res WxH: modo 1024 del juego → WxH (scenh.ini [resolucion]); --res off lo desactiva
     local ini="$GAME_DIR/scenh.ini" w h
     [[ -z "$SC_RES" ]] && return
+    if [[ "$SC_RES" == auto ]]; then
+        # Solo en una instalación nueva (scenh.ini recién creado) y en pantalla completa escalada; al
+        # reinstalar se respeta lo que haya en scenh.ini.
+        [[ "${NEW_SCENH_INI:-0}" == 1 && "$SC_DISPLAY" == scaled ]] || return 0
+        local mon fit
+        mon=$(monitor_res)
+        fit=$( [[ -n "$mon" ]] && fit_res "${mon%x*}" "${mon#*x}" )
+        if [[ -z "$fit" || "$fit" == 1024x768 ]]; then
+            ok "Pantalla: 1024x768 (no se detectó un monitor compatible con la pantalla panorámica)"
+            return
+        fi
+        SC_RES=$fit
+    fi
     if [[ "$SC_RES" == off ]]; then
         ini_section_set "$ini" resolucion activar 0; ok "Resolución panorámica desactivada"; return
     fi
@@ -456,6 +487,7 @@ setup_runtime() {
     cp -f "$dll" "$GAME_DIR/scenh.dll"
     if [[ ! -f "$GAME_DIR/scenh.ini" ]]; then
         cp "$SCRIPT_DIR/runtime/scenh.ini" "$GAME_DIR/scenh.ini"
+        NEW_SCENH_INI=1
     fi
     set_import_name SCENH.dll || { set_import_name GDI32.dll; return; }
     set_runtime_res
@@ -503,7 +535,7 @@ setup_ddraw() {
         return
     fi
     [[ "$SC_DISPLAY" == scaled ]] || die "SC_DISPLAY inválido: $SC_DISPLAY (scaled|window)"
-    log "Modo de pantalla: scaled (cnc-ddraw, pantalla completa 4:3)…"
+    log "Modo de pantalla: scaled (cnc-ddraw, pantalla completa escalada)…"
     local cache="$SC_ROOT/media/cnc-ddraw.zip" tmp boxing shader filter=$SC_FILTER
     case "$SC_SCALING" in
         fit)     boxing=false ;;
@@ -1048,8 +1080,9 @@ Opciones (o variables de entorno equivalentes):
                       = 1024 en una instalación nueva; al reinstalar se conserva la elegida)
                       1024 = más área del mapa visible
   --no-patch          No aplicar el parche de compatibilidad (SC_PATCH=0)
-  --res WxH|off       EXPERIMENTAL: partida en WxH (p. ej. 1920x1080) en lugar de 1024x768,
-                      con más mapa visible; requiere el runtime (SC_RES)
+  --res auto|WxH|off  Pantalla panorámica (experimental): la partida en WxH en lugar de 1024x768,
+                      con más mapa visible; requiere el runtime. auto = la del monitor en una
+                      instalación nueva (al reinstalar se conserva); off = 4:3 original (SC_RES, def: auto)
   --no-runtime        Sin el runtime de mejoras scenh.dll (velocidad con +/-, menos CPU) (SC_RUNTIME=0)
   --no-vdesktop       Sin escritorio virtual de Wine      (SC_VDESKTOP=0)
   --vdesktop-res WxH  Tamaño del escritorio virtual       (SC_VDESKTOP_RES, def: auto)
