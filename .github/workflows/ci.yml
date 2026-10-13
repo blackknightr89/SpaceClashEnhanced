@@ -22,8 +22,14 @@ jobs:
           bash -n install-spaceclash.sh
           shellcheck -S warning install-spaceclash.sh
 
+      - name: Compilar el runtime de mejoras (scenh.dll)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-i686 >/dev/null
+          make -C runtime CFLAGS=-Werror
+          i686-w64-mingw32-objdump -p runtime/build/scenh.dll | grep -q 'gdi32.GetStockObject'
+
       - name: Sintaxis de las herramientas Python
-        run: python3 -m py_compile tools/*.py
+        run: python3 -m py_compile tools/*.py tools/re/*.py
 
       - name: PSScriptAnalyzer (install-spaceclash.ps1)
         shell: pwsh
@@ -65,8 +71,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Armar SpaceClashEnhanced.zip
-        run: git archive --format=zip --prefix=SpaceClashEnhanced/ -o SpaceClashEnhanced.zip "$GITHUB_REF_NAME"
+      - name: Armar SpaceClashEnhanced.zip (con runtime/scenh.dll compilada)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-i686 zip >/dev/null
+          make -C runtime VERSION="$GITHUB_REF_NAME"
+          git archive --format=zip --prefix=SpaceClashEnhanced/ -o SpaceClashEnhanced.zip "$GITHUB_REF_NAME"
+          mkdir -p z/SpaceClashEnhanced/runtime && cp runtime/build/scenh.dll z/SpaceClashEnhanced/runtime/
+          (cd z && zip -q ../SpaceClashEnhanced.zip SpaceClashEnhanced/runtime/scenh.dll)
 
       - name: Adjuntar al release
         env:

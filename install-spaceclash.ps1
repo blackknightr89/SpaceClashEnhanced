@@ -62,6 +62,11 @@ param(
     [string]$VideosAi = 'Ask',
     # Python a usar para -VideosAi (por defecto: el lanzador py -3, o python.exe del PATH)
     [string]$Python = '',
+    # Sin el runtime de mejoras scenh.dll (velocidad con + y -, menos consumo de CPU, avisos en pantalla)
+    [switch]$NoRuntime,
+    # EXPERIMENTAL: partida en WxH (p. ej. 1920x1080) en lugar de 1024x768, con más mapa
+    # visible (requiere el runtime). 'off' la desactiva; vacío = no tocar
+    [string]$Res = '',
     [switch]$NoShortcut,
     [switch]$SkipHash,
     [switch]$SkipDirectPlay,
@@ -111,6 +116,15 @@ $Patches = @(
            @(0x1c070, $P4o, $P4n), @(0x20303, $P4o, $P4n), @(0x20365, $P4o, $P4n),
            @(0x203ae, $P4o, $P4n), @(0x203f7, $P4o, $P4n), @(0x205b7, $P4o, $P4n),
            @(0x2063a, $P4o, $P4n)) }
+)
+
+# Runtime de mejoras (scenh.dll, carpeta runtime\). El juego la carga porque se renombra su import
+# "GDI32.dll" a "SCENH.dll" (mismo largo; la DLL reenvía GetStockObject a gdi32). Antes de los parches
+# P1-P4 se vuelve al nombre original, así que reinstalar o usar -NoRuntime deja los EXE como antes.
+# Final = SHA-256 con P1-P4 + runtime.
+$RuntimeImports = @(
+    @{ File = 'CLASH.EXE'; Off = 0x806d4; Final = 'eac913cae176c501d718fcf3a63a39539458834bff97511d5813fb3deaa0f353' },
+    @{ File = 'SPACE.EXE'; Off = 0x65aaa; Final = '142ef3a4530165765c1bc886e3b93880997b392bddffa4e34c5abcfe164137ea' }
 )
 
 # Filtro DirectShow "Video Renderer default" (VMR7). En modo Scaled se baja su mérito para que se use
@@ -374,6 +388,79 @@ function Install-Patches {
         if ($h -ne $p.Final) { Copy-Item -Force $orig $path; Fail "Verificación de $($p.File) falló ($h); restaurado el original" }
         Write-Ok "$($p.File) parcheado (original en $($p.File).ORIG)"
     }
+}
+
+function Get-ImportName([string]$Path, [int]$Off) {
+    $b = [System.IO.File]::ReadAllBytes($Path)
+    return [System.Text.Encoding]::ASCII.GetString($b, $Off, 9)
+}
+
+function Set-ImportName([string]$Name) {   # GDI32.dll (original) o SCENH.dll (runtime) en ambos EXE
+    foreach ($r in $RuntimeImports) {
+        $path = Join-Path $GameDir $r.File
+        if (-not (Test-Path $path)) { continue }
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        $cur = [System.Text.Encoding]::ASCII.GetString($bytes, $r.Off, 9)
+        if ($cur -eq $Name) { continue }
+        if ($cur -ne 'GDI32.dll' -and $cur -ne 'SCENH.dll') {
+            Write-Warn2 ("{0}: import inesperado en 0x{1:x} ('{2}'); no se toca" -f $r.File, $r.Off, $cur); return $false
+        }
+        [Array]::Copy([System.Text.Encoding]::ASCII.GetBytes($Name), 0, $bytes, $r.Off, 9)
+        [System.IO.File]::WriteAllBytes($path, $bytes)
+    }
+    return $true
+}
+
+function Test-Res {   # valida -Res antes de empezar a instalar; devuelve @(ancho, alto) o $null
+    if (-not $Res -or $Res -eq 'off') { return $null }
+    if ($Res -notmatch '^(\d+)x(\d+)$') { Fail "-Res inválido: $Res (p. ej. 1920x1080, u off)" }
+    $w = [int]$Matches[1]; $h = [int]$Matches[2]
+    if ($w -lt 1024 -or $w -gt 2560 -or ($w % 8) -ne 0 -or $h -lt 600 -or $h -gt 1600 -or ($w * $h) -lt (1024 * 768)) {
+        Fail "-Res $Res fuera de rango: ancho 1024-2560 (múltiplo de 8), alto 600-1600, área >= 1024x768"
+    }
+    return @($w, $h)
+}
+
+function Set-ScenhKey([string]$Ini, [string]$Section, [string]$Key, [string]$Value) {
+    $utf8 = New-Object System.Text.UTF8Encoding $false   # sin BOM: lo lee GetPrivateProfileInt
+    $lines = [System.Collections.Generic.List[string]]@([System.IO.File]::ReadAllLines($Ini, $utf8))
+    $start = $lines.IndexOf("[$Section]")
+    if ($start -lt 0) { $lines.Add(''); $lines.Add("[$Section]"); $start = $lines.Count - 1 }
+    $i = $start + 1
+    while ($i -lt $lines.Count -and -not $lines[$i].StartsWith('[')) {
+        if ($lines[$i].StartsWith("$Key=")) { $lines[$i] = "$Key=$Value"; [System.IO.File]::WriteAllLines($Ini, $lines, $utf8); return }
+        $i++
+    }
+    $lines.Insert($start + 1, "$Key=$Value")
+    [System.IO.File]::WriteAllLines($Ini, $lines, $utf8)
+}
+
+function Install-Runtime {
+    if ($NoRuntime) {
+        Set-ImportName 'GDI32.dll' | Out-Null
+        Write-Ok 'Runtime de mejoras desactivado (-NoRuntime)'; return
+    }
+    $dll = @((Join-Path $ScriptDir 'runtime\scenh.dll'), (Join-Path $ScriptDir 'runtime\build\scenh.dll')) |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $dll) {
+        Write-Warn2 'No está runtime\scenh.dll (viene en SpaceClashEnhanced.zip): se instala sin mejoras'
+        Set-ImportName 'GDI32.dll' | Out-Null; return
+    }
+    Copy-Item -Force $dll (Join-Path $GameDir 'scenh.dll')
+    $ini = Join-Path $GameDir 'scenh.ini'
+    if (-not (Test-Path $ini)) { Copy-Item (Join-Path $ScriptDir 'runtime\scenh.ini') $ini }
+    if (-not (Set-ImportName 'SCENH.dll')) { Set-ImportName 'GDI32.dll' | Out-Null; return }
+    if ($Res -eq 'off') {
+        Set-ScenhKey $ini 'resolucion' 'activar' '0'; Write-Ok 'Resolución panorámica desactivada'
+    } elseif ($Res) {
+        $wh = Test-Res
+        Set-ScenhKey $ini 'resolucion' 'activar' '1'
+        Set-ScenhKey $ini 'resolucion' 'ancho' "$($wh[0])"
+        Set-ScenhKey $ini 'resolucion' 'alto' "$($wh[1])"
+        $script:GameRes = '1024'   # la resolución panorámica reemplaza al modo 1024 del juego
+        Write-Ok "Resolución panorámica (experimental): $Res"
+    }
+    Write-Ok "Runtime de mejoras instalado: velocidad con + y - durante la partida (opciones en $ini)"
 }
 
 # --------------------------------------------------------------------------- #
@@ -859,11 +946,14 @@ function Invoke-Install {
         Fail 'El juego está abierto. Cerralo antes de instalar/actualizar.'
     }
     Write-Step "Instalando Space Clash en $InstallDir"
+    Test-Res | Out-Null
     Test-Requirements
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Expand-GameImage
     Install-GameFiles
+    Set-ImportName 'GDI32.dll' | Out-Null   # P1-P4 se verifican sobre el EXE sin el runtime
     Install-Patches
+    Install-Runtime
     Install-Display
     Set-GameRes
     Install-Videos
@@ -883,10 +973,16 @@ function Invoke-Doctor {
     Write-Host "InstallDir = $InstallDir"
     Report 'CD extraído (UNCLASH.EXE, MUSICAS, VIDEOS)' ((Test-Path "$CdDir\UNCLASH.EXE") -and (Test-Path "$CdDir\MUSICAS\M0.WAV") -and (Test-Path "$CdDir\VIDEOS\INTRO.MPG"))
     Report 'Juego copiado (CLASH.EXE, SPACE.EXE, ANI\)' ((Test-Path "$GameDir\CLASH.EXE") -and (Test-Path "$GameDir\SPACE.EXE") -and (@(Get-ChildItem -ErrorAction SilentlyContinue "$GameDir\ANI").Count -gt 300))
+    $rt = (Test-Path "$GameDir\scenh.dll") -and (Test-Path "$GameDir\CLASH.EXE") -and
+          ((Get-ImportName "$GameDir\CLASH.EXE" 0x806d4) -eq 'SCENH.dll')
     foreach ($p in $Patches) {
         $f = Join-Path $GameDir $p.File
-        Report "$($p.File) parcheado" ((Test-Path $f) -and ((Get-Sha256 $f) -eq $p.Final))
+        $final = $p.Final
+        if ($rt) { $final = ($RuntimeImports | Where-Object { $_.File -eq $p.File }).Final }
+        Report ("$($p.File) parcheado" + $(if ($rt) { ' (con runtime)' } else { '' })) ((Test-Path $f) -and ((Get-Sha256 $f) -eq $final))
     }
+    if ($rt) { Write-Ok "Runtime de mejoras activo (opciones en $GameDir\scenh.ini)" }
+    else { Write-Host '    Runtime de mejoras: no instalado' }
     Report 'Lanzador' (Test-Path $Launcher)
     if (Test-Path "$GameDir\ddraw.dll") {
         $dd = @(Get-Content "$GameDir\ddraw.ini" | Where-Object { $_ -match '^(renderer|boxing|shader)=' } | Select-Object -First 3) -join '; '

@@ -1,0 +1,520 @@
+exe,va,kind,name,signature,status,evidence,notes
+CLASH,0x401060,func,anim_set_pos,"void anim_set_pos(Anim* a, int x, int y)",named,escribe +4/+8 si a->tipo≠0,
+CLASH,0x401080,func,anim_advance,void anim_advance(Anim* a),named,decrementa +0xE y avanza el frame +0xC,
+CLASH,0x401100,func,sprite_obj_draw,"void sprite_obj_draw(SpriteObj* o, int x, int y, uint8_t* dst)",hypothesis,"modo +1: 0 normal, 1 translúcido (PALT por +0x12=20/30/40), 2 sombreado PALS nivel +0x12",alias: anim_draw
+CLASH,0x401250,func,button_init,"int button_init(Button* b, char type, short x, short y, SpcSprite* spr, uint8_t frame, uint8_t icon, const char* label)",named,"Button de 0xD8 B: +0 x, +2 y, +4 estado, +5 tipo, +8 sprites, +0xC frame, +0xF icono, +0x10 texto",alias: widget_init
+CLASH,0x401340,func,button_draw,"int button_draw(Button* b, uint8_t* dst)",named,tipo 1: fondo frame/frame+1 e icono centrado; tipo 2: sprite y tooltip al pasar; 3 texto; 4 sprite,
+CLASH,0x401970,func,button_panel_init,"int button_panel_init(ButtonPanel* p, const ButtonPanel* tmpl)",named,copia 0x10E8 B de la plantilla (0x461E50 para el HUD),alias: panel_load
+CLASH,0x401A60,func,button_panel_draw,"int button_panel_draw(ButtonPanel* p, uint8_t* dst)",named,button_draw para cada uno de p->count (stride 0xD8),
+CLASH,0x402320,func,spr_load,"int16_t spr_load(const char* path, SprTile out[256], uint8_t pal[768])",named,"comprueba EFSSPR; slot = u16 w,u16 h,u32 size; devuelve 0 o -1",docs/formats/spr.md
+CLASH,0x4041A0,func,diplo_adjust_relation,"void diplo_adjust_relation(int8_t a, int8_t b, double delta)",named,suma a 0x881F70[a][b] con tope 0..100; <0 -> 0x404D00,
+CLASH,0x404D00,func,diplo_declare_war,"void diplo_declare_war(int8_t a, int8_t b)",named,estado 0; s_DECLARADA_LA_GUERRA,
+CLASH,0x404FA0,func,diplo_sign_peace,"void diplo_sign_peace(int8_t a, int8_t b)",named,estado 1; s_FIRMADO_TRATADO_DE_PAZ,
+CLASH,0x4051C0,func,diplo_sign_alliance,"void diplo_sign_alliance(int8_t a, int8_t b)",named,estado 2; s_FIRMADA_ALIANZA,
+CLASH,0x405E90,func,dp_init_modem,HRESULT dp_init_modem(void),named,"CoCreateInstance(CLSID_DirectPlayLobby, IID_IDirectPlayLobby3A); CreateCompoundAddress(DPAID_ServiceProvider, DPAID_Phone)",
+CLASH,0x405FE0,func,dp_get_caps,void dp_get_caps(void),named,vtable+0x38 GetCaps con DPCAPS dwSize=0x28,
+CLASH,0x406030,func,dp_close,HRESULT dp_close(void),named,vtable+0x10 Close,
+CLASH,0x406050,func,dp_create,HRESULT dp_create(void* connection),named,"CoCreateInstance(CLSID_DirectPlay, IID_IDirectPlay4A, &g_dplay); vtable+0x98 InitializeConnection",
+CLASH,0x4060E0,func,dp_create_player,"HRESULT dp_create_player(DPID* id, char* name, HANDLE ev, void* data, DWORD size)",named,vtable+0x18 CreatePlayer; DPNAME dwSize=0x10,
+CLASH,0x406140,func,dp_create_session,HRESULT dp_create_session(char* name),named,vtable+0x60 Open(DPOPEN_CREATE=2); flags 0x44 (+0x2000),
+CLASH,0x4061E0,func,dp_destroy_player,HRESULT dp_destroy_player(DPID id),named,vtable+0x24 DestroyPlayer,
+CLASH,0x406200,func,dp_enum_players,"HRESULT dp_enum_players(GUID* s, void* cb, void* ctx, DWORD flags)",named,vtable+0x30 EnumPlayers,
+CLASH,0x406230,func,dp_enum_sessions,"HRESULT dp_enum_sessions(DWORD timeout, void* cb, void* ctx, DWORD flags)",named,vtable+0x34 EnumSessions; DPSESSIONDESC2 dwSize=0x50,
+CLASH,0x4062B0,func,dp_get_player_data,"HRESULT dp_get_player_data(DPID id, void* buf, DWORD* size, DWORD flags)",named,vtable+0x50 GetPlayerData,
+CLASH,0x4062E0,func,dp_get_session_desc,HRESULT dp_get_session_desc(void),named,vtable+0x58 GetSessionDesc dos veces (tamano + malloc en 0x483BAC),
+CLASH,0x406360,func,dp_set_session_desc,HRESULT dp_set_session_desc(void),named,vtable+0x7C SetSessionDesc(0x483BAC),
+CLASH,0x406380,func,dp_open_session,HRESULT dp_open_session(GUID* instance),named,vtable+0x60 Open(DPOPEN_JOIN=1),
+CLASH,0x406430,func,dp_receive,"HRESULT dp_receive(DPID* from, DPID* to, DWORD flags, void* buf, DWORD* size)",named,vtable+0x64 Receive,
+CLASH,0x406460,func,dp_release,HRESULT dp_release(void),named,free 0x483BAC/0x483B2C; vtable+8 Release,
+CLASH,0x4064C0,func,dp_send_ex,"HRESULT dp_send_ex(DPID from, DPID to, DWORD flags, void* data, DWORD size)",named,"vtable+0xC4 SendEx(...,0,0,0,0)",
+CLASH,0x406500,func,dp_set_player_data,"HRESULT dp_set_player_data(DPID id, void* data, DWORD size, DWORD flags)",named,vtable+0x74 SetPlayerData,
+CLASH,0x406D10,func,draw_deposit,"void draw_deposit(int x, int y, uint8_t* dst)",named,igual que 0x406F90 + sprite DET; slot+8 si agotado,
+CLASH,0x406F90,func,draw_deposit_static,"void draw_deposit_static(int x, int y, uint8_t* dst)",named,"3 entradas {tipo,slot,dx,dy} en +0x1C; sombra DET_SB con PALS nivel 20",
+CLASH,0x40A2F0,func,map_spawn_object,"void map_spawn_object(int x, int y, int type, int player)",hypothesis,llamada desde map_load si el byte 27 de la celda = 1,
+CLASH,0x40DD30,func,load_palcf_palcs,void load_palcf_palcs(void),named,"palcf.dat→0x729EE0, palcs.dat→0x73A000 (64 KiB cada una)",
+CLASH,0x40DDD0,func,load_pals,void load_pals(uint8_t* dst),named,pals.dat: 256 filas de 128 B → 0x85F700,
+CLASH,0x40DE20,func,load_palt,"void load_palt(char pct, uint8_t* dst)",named,palt%03d.dat (20/30/40) → 0x8AD3A0/0x882DC0/0x892DE0,
+CLASH,0x40DE90,func,gfx_tint_rect,"void gfx_tint_rect(int x, int y, int w, int h, uint8_t color, const uint8_t* table, uint8_t* dst)",named,dst=table[dst<<8|color]; con PALCS,
+CLASH,0x40E0E0,func,gfx_shade_rect,"void gfx_shade_rect(int x, int y, int w, int h, const uint8_t* pals, int8_t level, uint8_t* dst)",named,dst=pals[dst*128+n] como spc_draw_shade,
+CLASH,0x40E1E0,func,gfx_rect,"void gfx_rect(int x, int y, int w, int h, uint8_t color, uint8_t* dst, int fill)",named,contorno (fill=0) o relleno; pitch g_screen_w,
+CLASH,0x40E9D0,func,credit_cap_for_rank,int credit_cap_for_rank(int8_t rank),named,switch 0..4 -> 20000..40000,
+CLASH,0x4117F0,func,mission_end_handoff,"void mission_end_handoff(int8_t code, int defeat)",hypothesis,suma creditos 0x881FD8->0x728CC0; planeta_nfo_write/recom_nfo_write; run_space_and_wait,"code: 0 fin de mision, -1 nueva campana, -2 cargar espacial, -3 retirada"
+CLASH,0x412F40,func,text_count_spaces,int text_count_spaces(const char* s),named,cuenta ' ' (justificado),
+CLASH,0x412F60,func,text_wrap_line,"int text_wrap_line(const char* s, char* out, char* font, uint8_t* color, int maxw)",named,corta en |n o en el último espacio que cabe; devuelve bytes consumidos o -1,
+CLASH,0x413530,func,text_width,"int16_t text_width(const char* s, int font)",named,suma avances hasta |n o fin,
+CLASH,0x4139F0,func,text_max_width,"int text_max_width(const char* s, int font)",named,máximo por línea,bug: movsx en 0x413E27 (bytes ≥0x80)
+CLASH,0x413EF0,func,text_count_lines,int text_count_lines(const char* s),named,1 + número de |n,
+CLASH,0x413F20,func,draw_glyph,"void draw_glyph(int x, int y, uint8_t ch, int font, uint8_t color, int unused, uint8_t* dst)",named,"font[ch*16]; fuentes 1,5-8 → blit_rle; resto → blit_rle_solid",alias: glyph_draw
+CLASH,0x413FF0,func,draw_text,"void draw_text(int x, int y, const char* s, int font, char align, int width, uint8_t color, uint8_t* dst)",named,switch de fuentes 0..8; align 'C'/'D'/'J'; parser |c|f|n|t|x|y; 438 llamadas,hook L2 de respaldo; alias: text_draw
+CLASH,0x414810,func,draw_text_box,"void draw_text_box(int x, int y, int w, int h, const char* s, int font, char align, uint8_t color, uint8_t* dst)",named,_chkstk(0x1877C); bucle text_wrap_line; centra verticalmente; llama a draw_text,hook L2 de respaldo
+CLASH,0x414A50,func,set_video_mode,,named,REMASTER §15.C,
+CLASH,0x414B90,func,release_surfaces,,named,REMASTER §15.C,
+CLASH,0x414BD0,func,ddraw_set_palette,void ddraw_set_palette(PALETTEENTRY pal[256]),named,"pal->SetEntries(0,0,256,p) (+0x18); primary->SetPalette (+0x7C) con Restore si DDERR_SURFACELOST",
+CLASH,0x414C30,func,surface_lock,void* surface_lock(IDirectDrawSurface* s),named,Lock(+0x64) con DDSURFACEDESC 0x481DA8; devuelve lpSurface (0x481DCC) o 0,
+CLASH,0x414C80,func,surface_unlock,void surface_unlock(IDirectDrawSurface* s),named,Unlock (+0x80),
+CLASH,0x414C90,func,surface_flip,void surface_flip(void),named,"primary->Flip(0,0) (+0x2C) en bucle con Restore",
+CLASH,0x415210,func,process_running,"int process_running(const char* name, int minCount)",named,RUNTIME.md (P1),
+CLASH,0x415310,func,load_planet_tileset,void load_planet_tileset(char tt),named,"suelos%02d.spr→0x48E860, det%02d.spc→0x491100, det_sb%02d.spc→0x8DBC20",alias: load_terrain_set
+CLASH,0x4153C0,func,game_init,int game_init(void),named,"SetTimer(1,1000)/(2,150)/(3,180000); carga FNT*.SPC y CURSORES.SPC",
+CLASH,0x415401,code,read_cdsc_ins,,named,Cdsc.ins → letra del CD en 0x8EC2E1,
+CLASH,0x415BF0,func,game_shutdown,void game_shutdown(void),named,"KillTimer 1..3, ReleaseDC; llamada en WM_CLOSE",
+CLASH,0x415D10,func,app_main,int app_main(HINSTANCE hInst),named,"RegisterClassExA(0x85F020), CreateWindowExA, bucle PeekMessage/WaitMessage/GetMessage",contiene create_main_window 0x415DE0
+CLASH,0x415DE0,code,create_main_window,,named,"CreateWindowExA(""VENTANA_BASE"")",
+CLASH,0x4161D0,func,recom_nfo_write,int recom_nfo_write(void),named,"fopen recom.nfo; fputs EFSCLANSRECOM; bloque comun + 4 x {f64,4x(u8,f64),5xi16}",alias: write_recom_nfo
+CLASH,0x4163C0,func,conf_nfo_write,int conf_nfo_write(void),named,fopen conf.nfo; EFSCLANSPLANETA + i16 res + u8 jugador + 8 x i32,alias: write_conf_nfo
+CLASH,0x4164B0,func,planeta_nfo_write,"int planeta_nfo_write(int8_t code, int8_t mission, int won)",named,fopen planeta.nfo; code -1/-2/-3 o rango; validado con planeta.nfo real (413 B),alias: write_planeta_nfo
+CLASH,0x4168D0,func,esp_nfo_read,int esp_nfo_read(void),named,fopen esp.nfo rb; cmp EFSCLANSESP; switch cmd 1/2/3,alias: read_esp_nfo
+CLASH,0x416C80,func,palette_black,void palette_black(void),named,256 entradas a 0 → ddraw_set_palette,
+CLASH,0x416CC0,func,clear_surfaces,void clear_surfaces(void),named,Lock primaria/back y memset ancho*alto a 0; Flip,ignora lPitch
+CLASH,0x416DE0,func,run_space_and_wait,void run_space_and_wait(void),named,"conf_nfo_write; _spawnl(1,""Space.exe"",0); Sleep(2000); _cwait; esp_nfo_read",alias: run_space_exe
+CLASH,0x416F30,func,sav_list_slots,void sav_list_slots(void),named,sprintf s%d.sav x10; lee descripcion 0x96 a 0x48AA40,
+CLASH,0x417040,func,sav_load,int sav_load(int16_t slot),named,fread de todo el estado; EFSCLANSESP -> 0x4117F0(-2); CopyFileA esp%d.sav->esp.sav,alias: savegame_load
+CLASH,0x417C80,func,sav_save,int sav_save(int8_t slot),named,fputs EFSCLANSSAV; validado con s0.sav (274404 B),alias: savegame_save
+CLASH,0x418740,func,map_reset,void map_reset(MapHeader* h),named,llamada al inicio de map_load con 0x694FC0; inicializa 100 entidades de 0x1770 B,
+CLASH,0x418820,func,map_compute_move_class,void map_compute_move_class(MapHeader* h),hypothesis,rellena +0x05 de cada celda con las tablas 0x453258/0x453658[tileset*256+slot]; tiles 80×80 por cuadrante (bits 8/4/2/1),+0x05: 0/1/2 consultado por 0x435ED0
+CLASH,0x418950,func,map_load,int map_load(const char* path),named,"u8 ancho→0x694FC0, u8 alto→0x694FC2; 32 B por celda",docs/formats/map.md
+CLASH,0x418CB0,func,minimap_build_base,void minimap_build_base(void),named,moda de color por bloque 20×20 de cada tile → 0x87CB60; luego 2×2 (tipo 1) o 4×4 (tipo 2) px por celda en 0x8F22A0,llamada al final de map_load
+CLASH,0x419030,func,camera_scroll_update,void camera_scroll_update(void),named,"scroll por borde (margen 5 px, ±4 px/tick hasta 40), clamp 0..mapa*40-vista-1, arrastre en minimapa (zona 2/6) y reposición de 0x87BB28/2A",
+CLASH,0x419690,func,draw_terrain,void draw_terrain(uint8_t* dst),named,bucle filas y (camY/40-1 .. viewH/40+1) × columnas x; omite celdas con tipo (+0x02)=3; gfx_blit_opaque con w/h del tile,celda 40 px; destino g_terrain_cache
+CLASH,0x419930,func,draw_fog,void draw_fog(uint8_t* dst),named,+0x04=0 → negro 40×40 o borde; +0x04=1 → trama (cursores slot 1/2) sólida color 0; decal +0x06,
+CLASH,0x419C70,func,draw_territory_borders,void draw_territory_borders(uint8_t* dst),hypothesis,si 0x7287F0=1: trama de color del dueño (+0x03) en celdas exploradas,
+CLASH,0x419E80,func,minimap_compose,void minimap_compose(void),named,"copia 0x8F22A0→0x8A2E00 y superpone territorio (PALCS), recursos, niebla (PALS), edificios y unidades",cada tick o cada frame según g_detail_level
+CLASH,0x41A3B0,func,minimap_draw_hud,void minimap_draw_hud(uint8_t* dst),named,"clip al rectángulo 0x8BF9FA/0x8BFA00/0x5A4B8C/0x5A4B8E; blit en (0x87BB28,0x87BB2A); marco blanco del área visible",
+CLASH,0x41A4D0,func,minimap_draw_window,void minimap_draw_window(uint8_t* dst),hypothesis,mismo dibujo centrado en la ventana flotante 0x8BE800 (ancho 0x8BE810),zona de cursor 6
+CLASH,0x41A5B0,func,cursor_redraw,void cursor_redraw(void),named,GetCursorPos → g_mouse_x/y; restaura 40x40 alrededor del cursor anterior y dibuja el nuevo en la superficie visible,alias: draw_soft_cursor
+CLASH,0x41BD10,func,hud_draw_info_panel,void hud_draw_info_panel(void),hypothesis,"retrato animado y barras ENERGIA/CARGA/EXPERIENCIA/MORAL en (0x8E88C0,0x8E88C2)",
+CLASH,0x41C290,func,draw_hud_panels,void draw_hud_panels(void),hypothesis,"textos/gráficos en h-k; ramas por g_video_mode (x=0x270 modo>=2, x=0x30E modo 3)",alias: hud_draw_status
+CLASH,0x41CDC0,func,draw_order_icons,void draw_order_icons(void),hypothesis,copia SIN ORDEN/DEFENDER/... con movs inline y marca la letra rápida,
+CLASH,0x41D350,func,draw_cell_objects,void draw_cell_objects(uint8_t* dst),hypothesis,versión por frame (sombras dinámicas) de depósitos y edificios,
+CLASH,0x41D4D0,func,draw_static_cell_objects,void draw_static_cell_objects(uint8_t* dst),hypothesis,edificios (+0x2C con +0x29=1) y depósitos sobre la capa estática,
+CLASH,0x41DCB0,func,render_game_view,void render_game_view(void),hypothesis,clip a view_w/view_h; terreno 0x74FF40→0x882DA8; 0x882DA8→0x493214; capas de entidades,alias: render_frame
+CLASH,0x41FCA0,func,cfg_load,void cfg_load(void),named,"fopen(""clash.cfg"",""rb""): 7 bool → 0x8E98E0[i], i32 0x72882C, i32 0x8F1F98, u8 0x693E61, i16 0x492108",llamada desde 0x425676
+CLASH,0x41FD60,func,cfg_save,void cfg_save(void),named,mismo orden con fwrite; llamada desde 0x420E8F (SALVAR CONFIGURACION),
+CLASH,0x41FF70,func,main_menu,void main_menu(void),hypothesis,strings NUEVA PARTIDA/CARGAR PARTIDA/MULTIJUGADOR/CREAR SESION/UNIRSE A SESION/OPCIONES,
+CLASH,0x4256E0,func,game_setup_menu_loop,int game_setup_menu_loop(void),hypothesis,"bucle de menus; elige imperio (0x425CB0 en red, 0x41F400 local); copia 0x8E98E0[] a las opciones",
+CLASH,0x425BD0,func,net_build_player_table,void net_build_player_table(void),named,copia 0x880E80 (0x24) a 0x693E84 (0x14) por imperio; estado 1/2,
+CLASH,0x425CB0,func,mp_lobby_empire_select,int8_t mp_lobby_empire_select(void),named,menuclan.pcx; LanzarJuego; SetPlayerData 0x24 B; devuelve imperio,
+CLASH,0x4269D0,func,clear_window_gdi,void clear_window_gdi(void),named,"FillRect(hdc,{0,0,8000,8000},GetStockObject(BLACK_BRUSH))",
+CLASH,0x427340,func,present_to_primary_loop,void present_to_primary_loop(void),hypothesis,lock primaria; copia ancho*alto a 0x882DA8; bucle copia a back + flip mientras 0x728864,alias: pause_loop
+CLASH,0x4274B0,func,play_video,,named,VIDEOS.md §1.1,
+CLASH,0x4276D0,func,rank_name,"void rank_name(char* out, int8_t rank)",named,Capitan/Comandante/Coronel/General/Gobernador,
+CLASH,0x427790,func,game_mode_name,"void game_mode_name(char* out, int8_t mode)",named,Campana Espacial/Lineal/Modo Escenarios/Misiones/Multijugador,
+CLASH,0x427BB0,func,camera_shake,void camera_shake(void),named,desplaza cámara con rand() y reaplica el clamp,si 0x48A9B4 != 0
+CLASH,0x4286E0,func,pump_one_message,void pump_one_message(void),named,PeekMessage+GetMessage+Translate+Dispatch de un mensaje,usado por los bucles modales
+CLASH,0x428790,func,map_in_bounds,"int map_in_bounds(int x, int y)",named,0<=x<g_map_width && 0<=y<g_map_height,
+CLASH,0x4287C0,func,mouse_in_rect,"int mouse_in_rect(int x, int y, int w, int h)",named,"compara g_mouse_x/y con [x,x+w)×[y,y+h)",
+CLASH,0x428A70,func,apply_mode_layout,void apply_mode_layout(void),named,g_screen_w/h según g_video_mode 1/2/3; view_h=h-0xA7; anclas h-k del HUD; carga m640/m800/m1024.pcx en 0x882DA8,índices 0 o >3 no fijan ancho/alto; alias: hud_layout
+CLASH,0x428D20,func,change_video_mode,int change_video_mode(int16 idx),named,"FillRect negro; release_surfaces; set_video_mode(idx,hwnd); SetWindowPos 4000x4000; g_video_mode=idx; apply_mode_layout",equivale a SPACE 0x420DE0; alias: change_resolution
+CLASH,0x429150,func,mouse_init,void mouse_init(void),hypothesis,"0x482918=1; clip_cursor(0,0,0x47EEF0-1,0x47EEF4-1)",
+CLASH,0x429290,func,clip_cursor,"void clip_cursor(int l, int t, int r, int b)",named,ClipCursor si 0x482918≠0,
+CLASH,0x429360,func,pcx_load,"int16 pcx_load(const char* path, uint8_t* dst, uint8_t pal[1024], FILE* f)",named,valida PCX 8 bpp 1 plano; fseek 0x80; decode; paleta final 0x0C + 768 B → 256×4,usado con m640/m800/m1024.pcx
+CLASH,0x429510,func,pcx_decode_rle,"void pcx_decode_rle(FILE* f, PcxHeader* h, uint8_t* dst)",named,escribe (xmax-xmin+1)*(ymax-ymin+1) bytes lineales,sin stride de destino
+CLASH,0x42A540,func,cursor_zone_update,void cursor_zone_update(void),named,"escribe 0x729DC0: 1 mapa, 2 minimapa, 4 ventana, 5 menú radial, 6 minimapa en ventana, 0 HUD",
+CLASH,0x42ABE0,func,cursor_place,void cursor_place(void),named,"anim_set_pos(&g_cursor_anims[type], mouse ± w/2,h/2) por tipo",
+CLASH,0x42AF80,func,cursor_select_type,void cursor_select_type(void),hypothesis,elige g_cursor_type según contexto (modo destino 0x694FA0; bordes),
+CLASH,0x42BAF0,func,hud_buttons_update,void hud_buttons_update(void),named,traduce clics de botones a WM_KEYDOWN F1–F9/F11 y WM_SYSKEYDOWN 'X',
+CLASH,0x42BCB0,func,camera_tick,void camera_tick(void),named,"temblor opcional, camera_scroll_update y delta 0x694FCC/0x694FD0; marca g_terrain_dirty",
+CLASH,0x42BD10,func,sim_step,void sim_step(void),hypothesis,llamado cada >0x25 ms antes de net_lockstep_exchange en 0x42BE50,"alias: game_logic_step, game_tick"
+CLASH,0x42BE50,func,frame_tick,void frame_tick(void),named,"timeGetTime en 0x42BEBA; cmp ecx,0x25 en 0x42BED9; llama a game_logic_step y presenta","punto de Q2: imm8 en 0x42BEDB; alias: game_idle_tick, present_game_frame"
+CLASH,0x42C0C0,func,wnd_proc,"LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)",named,lpfnWndProc = 0x85F028 en app_main; switch WM_KEYDOWN/CHAR/SYSCHAR/TIMER/MOUSE*,Ghidra no la crea como función: hay que crearla
+CLASH,0x42E430,func,net_wait_room,int net_wait_room(void),named,INICIANDO CONEXION; JUGADORES EN RED / PREPARADOS; EnumPlayers cb 0x42E310,
+CLASH,0x42E890,func,net_enum_connections,int net_enum_connections(void),named,vtable+0x8C EnumConnections cb 0x42E9E0 -> 0x85F0A0,
+CLASH,0x42E8E0,func,net_connection_count,uint8_t net_connection_count(void),hypothesis,devuelve 0x482A84 (contador del callback 0x42E9E0),
+CLASH,0x42E8F0,func,net_select_connection,bool net_select_connection(int8_t i),named,dp_create(0x85F0A4 + i*0x6C),
+CLASH,0x42E940,func,net_refresh_sessions,uint net_refresh_sessions(uint period_ms),named,"timeGetTime; dp_enum_sessions(0, cb 0x42EA90, hwnd, 0x81)",
+CLASH,0x42E9A0,func,net_session_at,void* net_session_at(int8_t i),named,0x4830E0 + i*0x75,
+CLASH,0x42E9D0,func,net_session_count,uint8_t net_session_count(void),named,devuelve 0x4830C0,
+CLASH,0x42EBC0,func,net_join_session,int net_join_session(int8_t i),named,dp_open_session(0x4837C0+i*0x10); dp_create_player; host=0,
+CLASH,0x42EC20,func,net_host_session,int net_host_session(void),named,dp_create_session(nombre); dp_create_player; host=1,
+CLASH,0x42EC60,func,net_player_name,char* net_player_name(void),named,devuelve 0x4838C0,
+CLASH,0x42EC80,func,net_begin_game,void net_begin_game(void),named,dp_get_session_desc; srand(GetTickCount()),
+CLASH,0x42ECD0,func,net_quit,void net_quit(void),named,PostMessageA(WM_CLOSE),
+CLASH,0x42ECF0,func,net_poll_receive,int net_poll_receive(void),named,"bucle dp_receive; tick+1 -> 0x8DEC80, tick+2 -> 0x86C000; devuelve jugador+100",
+CLASH,0x42EEA0,func,net_handle_sysmsg,void net_handle_sysmsg(DPMSG_GENERIC* m),named,switch 3/5/0x31/0x101 = DPSYS_CREATEPLAYER/DESTROYPLAYER/SESSIONLOST/HOST,
+CLASH,0x42F080,func,net_shutdown,void net_shutdown(void),named,GlobalFree buffer; dp_set_player_data vacio; dp_close; dp_release,
+CLASH,0x42F0F0,func,cmd_player_dropped,void cmd_player_dropped(...),named,anade opcode 0x1E (2 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 2,ver partidas-red.md 6.6
+CLASH,0x42F140,func,cmd_tick_pulse,void cmd_tick_pulse(...),hypothesis,anade opcode 0x01 (1 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 1,ver partidas-red.md 6.6
+CLASH,0x42F180,func,cmd_sync_materials,void cmd_sync_materials(...),named,anade opcode 0x02 (32 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 32,ver partidas-red.md 6.6
+CLASH,0x42F1F0,func,cmd_toggle_pause,void cmd_toggle_pause(...),named,anade opcode 0x03 (1 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 1,ver partidas-red.md 6.6
+CLASH,0x42F230,func,cmd_unit_attack,void cmd_unit_attack(...),hypothesis,anade opcode 0x04 (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F2A0,func,cmd_unit_move,void cmd_unit_move(...),hypothesis,anade opcode 0x05 (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F310,func,cmd_unit_order_a,void cmd_unit_order_a(...),hypothesis,anade opcode 0x06 (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F380,func,cmd_unit_order_b,void cmd_unit_order_b(...),hypothesis,anade opcode 0x07 (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F3F0,func,cmd_unit_produce,void cmd_unit_produce(...),named,anade opcode 0x08 (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F460,func,cmd_unit_set_order,void cmd_unit_set_order(...),hypothesis,anade opcode 0x09 (6 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 6,ver partidas-red.md 6.6
+CLASH,0x42F4C0,func,cmd_unit_stop,void cmd_unit_stop(...),hypothesis,anade opcode 0x0A (4 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 4,ver partidas-red.md 6.6
+CLASH,0x42F510,func,cmd_unit_add_load,void cmd_unit_add_load(...),hypothesis,anade opcode 0x0B (10 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 10,ver partidas-red.md 6.6
+CLASH,0x42F590,func,cmd_unit_sub_load,void cmd_unit_sub_load(...),hypothesis,anade opcode 0x0C (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F600,func,cmd_unit_order6,void cmd_unit_order6(...),hypothesis,anade opcode 0x0D (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F670,func,cmd_message,void cmd_message(...),hypothesis,anade opcode 0x0E (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F6E0,func,cmd_group_order,void cmd_group_order(...),hypothesis,anade opcode 0x0F (26 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 26,ver partidas-red.md 6.6
+CLASH,0x42F7C0,func,cmd_unit_damage,void cmd_unit_damage(...),hypothesis,anade opcode 0x10 (12 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 12,ver partidas-red.md 6.6
+CLASH,0x42F830,func,cmd_building_place,void cmd_building_place(...),named,anade opcode 0x11 (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42F8A0,func,cmd_building_state3,void cmd_building_state3(...),hypothesis,anade opcode 0x12 (6 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 6,ver partidas-red.md 6.6
+CLASH,0x42F900,func,cmd_building_op19,void cmd_building_op19(...),hypothesis,anade opcode 0x13 (4 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 4,ver partidas-red.md 6.6
+CLASH,0x42F950,func,cmd_building_state0,void cmd_building_state0(...),hypothesis,anade opcode 0x14 (4 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 4,ver partidas-red.md 6.6
+CLASH,0x42F9A0,func,cmd_building_damage,void cmd_building_damage(...),hypothesis,anade opcode 0x15 (12 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 12,ver partidas-red.md 6.6
+CLASH,0x42FA10,func,cmd_building_state3b,void cmd_building_state3b(...),hypothesis,anade opcode 0x16 (6 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 6,ver partidas-red.md 6.6
+CLASH,0x42FA70,func,cmd_message2,void cmd_message2(...),hypothesis,anade opcode 0x17 (8 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 8,ver partidas-red.md 6.6
+CLASH,0x42FAD0,func,cmd_diplomacy,void cmd_diplomacy(...),named,anade opcode 0x18 (3 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 3,ver partidas-red.md 6.6
+CLASH,0x42FB30,func,cmd_transfer_credits,void cmd_transfer_credits(...),hypothesis,anade opcode 0x19 (12 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 12,ver partidas-red.md 6.6
+CLASH,0x42FB90,func,cmd_trade_material,void cmd_trade_material(...),hypothesis,anade opcode 0x1A (16 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 16,ver partidas-red.md 6.6
+CLASH,0x42FC30,func,cmd_op27,void cmd_op27(...),hypothesis,anade opcode 0x1B (12 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 12,ver partidas-red.md 6.6
+CLASH,0x42FC90,func,cmd_special_attack_b,void cmd_special_attack_b(...),hypothesis,anade opcode 0x1C (20 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 20,ver partidas-red.md 6.6
+CLASH,0x42FD00,func,cmd_special_attack_e,void cmd_special_attack_e(...),hypothesis,anade opcode 0x1D (20 B) al buffer 0x8DEC80+jugador*10000; DAT_0048d844 += 20,ver partidas-red.md 6.6
+CLASH,0x42FD70,func,net_exec_commands,void net_exec_commands(uint32_t* packet),named,cabecera 16 B; switch(opcode-1) 0..0x1E; tamanos por opcode,
+CLASH,0x430BD0,func,net_lockstep_exchange,void net_lockstep_exchange(void),named,"SendEx(DPID_ALLPLAYERS, GUARANTEED) del buffer local; espera paquetes; net_exec_commands de los 4",
+CLASH,0x432190,func,keyboard_snapshot,void keyboard_snapshot(uint8_t keys[256]),named,"GetKeyboardState con detección de flanco (latch 0x482FC0); keys[0x14], keys[0x2D]",
+CLASH,0x434A70,func,map_spawn_unit,"void map_spawn_unit(int x, int y, int type, int player)",hypothesis,llamada desde map_load con los bytes 21–24 de la celda,verificar el orden de los argumentos
+CLASH,0x435ED0,func,cell_passable,"int cell_passable(char move_type, int x, int y)",hypothesis,1 si (tipo0 y +0x05=1) o (tipo1 y +0x05=2) o (tipo2 y +0x05!=0) o tipo3,
+CLASH,0x445E60,func,msgbox_show,"int msgbox_show(Dialog* dlg, SpcSprite* frame, const char* text)",hypothesis,"mide con text_max_width(text,2) y text_count_lines; guarda el puntero en dlg[8]",avisos de F3–F8
+CLASH,0x446110,func,dialog_open,"int dialog_open(Dialog* dlg, const DialogDesc* d)",hypothesis,"usa d->{w,h,text,panel,frame}; tabla 0x478158",
+CLASH,0x446830,func,gfx_set_clip,"void gfx_set_clip(int x0, int y0, int x1, int y1)",named,"0x482B50/54 = x0/y0 (>=0); 0x47EEF8/FC = min(x1,w)/min(y1,h)",
+CLASH,0x446890,func,gfx_set_target_size,"void gfx_set_target_size(int w, int h)",named,escribe 0x47EEF0/0x47EEF4 y re-aplica el recorte; llamada desde set_video_mode con la tabla,
+CLASH,0x4468D0,func,gfx_grab_rect,"void gfx_grab_rect(int x, int y, int w, int h, uint8_t* dst, uint8_t* src)",named,copia un rectángulo de src (pantalla) a un búfer w×h,
+CLASH,0x446980,func,gfx_blit_opaque,"void gfx_blit_opaque(int x, int y, int w, int h, const uint8_t* src, uint8_t* dst)",named,copia opaca con recorte; usada para tiles SPR,
+CLASH,0x446A80,func,gfx_blit_keyed_if,"void gfx_blit_keyed_if(int x, int y, int w, int h, const uint8_t* src, uint8_t* dst, char skip)",named,llama a gfx_blit_keyed si skip==0,
+CLASH,0x446AB0,func,gfx_blit_keyed,"void gfx_blit_keyed(int x, int y, int w, int h, const uint8_t* src, uint8_t* dst)",named,como gfx_blit_opaque pero el índice 0 es transparente,
+CLASH,0x446B90,func,gfx_fill_rect,"void gfx_fill_rect(int x, int y, int w, int h, uint8_t color, uint8_t* dst)",named,recorta contra 0x482B50..0x47EEFC; dst + g_gfx_pitch*y + x,
+CLASH,0x446C90,func,spc_draw,"void spc_draw(int x, int y, const SpcSprite* s, uint8_t* dst)",named,RLE: byte≠0 → literal de n; 00 n → salto; 00 FF → fin de fila siempre,alias: blit_rle
+CLASH,0x446E90,func,spc_draw_solid,"void spc_draw_solid(int x, int y, const SpcSprite* s, uint8_t color, uint8_t* dst)",named,"cada píxel opaco se pinta con color: fuentes monocromas, siluetas, tramas",alias: blit_rle_solid
+CLASH,0x447090,func,spc_draw_shade,"void spc_draw_shade(int x, int y, const SpcSprite* s, const uint8_t* pals, int8_t level, uint8_t* dst)",named,"dst=pals[dst*128+n], n=|level|*64/100 (+64 si level<0); sombras",
+CLASH,0x4472F0,func,spc_draw_blend,"void spc_draw_blend(int x, int y, const SpcSprite* s, const uint8_t* table, uint8_t* dst)",named,dst=table[dst<<8|src]; tablas PALT020/030/040,
+CLASH,0x447520,func,spc_draw_tint,"void spc_draw_tint(int x, int y, const SpcSprite* s, uint8_t color, uint8_t* dst)",named,dst=PALCS[dst<<8|color] (0x73A000),
+CLASH,0x447760,func,spc_load,"int spc_load(const char* path, SpcSprite out[256], uint8_t pal[768])",named,"comprueba EFSSPC; u16 en hdr+6 = n.º de slots; fread(pal,3,256)",docs/formats/spc.md
+CLASH,0x447C90,func,fclose,int fclose(FILE* f),crt,comprueba f->_flag & 0x40,
+CLASH,0x447D10,func,malloc,void* malloc(size_t n),crt,"_nh_malloc(n, _newmode@0x482B94)",
+CLASH,0x447DC0,func,fgetc,int fgetc(FILE* f),crt,decrementa f->_cnt y lee *f->_ptr,
+CLASH,0x447DF0,func,free,void free(void* p),crt,,
+CLASH,0x447E40,func,fread,"size_t fread(void* buf, size_t size, size_t n, FILE* f)",crt,imul size*n; firmas de llamada en los loaders,
+CLASH,0x447FB0,func,fopen,"FILE* fopen(const char* path, const char* mode)",crt,"llama a _fsopen(path, mode, 0x40)",
+CLASH,0x447FD0,func,fseek,"int fseek(FILE* f, long off, int whence)",crt,whence 0/1/2,
+CLASH,0x4480A0,func,sprintf,"int sprintf(char* out, const char* fmt, ...)",crt,arma rutas .\Spc\uni%d%02d.spc etc.,
+CLASH,0x448110,func,srand,void srand(unsigned seed),crt,escribe la semilla en 0x47EF08,
+CLASH,0x448120,func,rand,int rand(void),crt,LCG 0x343FD/0x269EC3 sobre 0x47EF08,
+CLASH,0x4481C0,func,ldexp,"double ldexp(double x, int exp)",crt,,
+CLASH,0x448420,func,fwrite,"size_t fwrite(const void* buf, size_t size, size_t n, FILE* f)",crt,,
+CLASH,0x448570,func,clock,clock_t clock(void),crt,_ftime - inicio,
+CLASH,0x4485D0,func,atol,long atol(const char* s),crt,,
+CLASH,0x448670,func,atoi,int atoi(const char* s),crt,llama a atol,
+CLASH,0x448680,func,_chkstk,,crt,sondeo de pila por páginas de 0x1000,
+CLASH,0x4486B0,func,time,time_t time(time_t* t),crt,GetLocalTime/GetSystemTime/GetTimeZoneInformation,
+CLASH,0x4487E0,func,fputs,"int fputs(const char* s, FILE* f)",crt,strlen + fwrite,
+CLASH,0x448830,func,_cwait,"intptr_t _cwait(int* status, intptr_t h, int action)",crt,WaitForSingleObject + GetExitCodeProcess,
+CLASH,0x4488C0,func,_spawnl,"int _spawnl(int mode, const char* cmd, const char* arg0, ...)",crt,"_spawnve → CreateProcessA (0x44F9A0); llamada en 0x416E3E con _P_NOWAIT y ""Space.exe""",
+CLASH,0x4488E0,func,_strtime,char* _strtime(char* buf),crt,HH:MM:SS,
+CLASH,0x4489A0,func,_strdate,char* _strdate(char* buf),crt,MM/DD/YY,
+CLASH,0x448A60,func,remove,int remove(const char* path),crt,DeleteFileA,
+CLASH,0x448A90,func,operator_new,void* operator new(size_t n),crt,_nh_malloc(n 1),
+CLASH,0x44C540,func,_spawnve,"intptr_t _spawnve(int mode, const char* cmd, const char* const* argv, const char* const* envp)",named,"busca '\\','/',':' y extensiones .bat/.cmd/.exe/.com (0x481424)",
+CLASH,0x44F9A0,func,_dospawn,"intptr_t _dospawn(int mode, const char* name, char* cmdline, char* env)",named,CreateProcessA; mode 0 WaitForSingleObject+GetExitCodeProcess; 2 _exit; 4 detach,
+CLASH,0x452500,func,_filelength,long _filelength(int fd),crt,_lseek fin/inicio,
+CLASH,0x452590,func,_fileno,int _fileno(FILE* f),crt,devuelve f->_file,
+CLASH,0x454340,data,g_cursor_anim_defs,struct {int n; SpcSprite* bank; frames*}[30],named,todos apuntan a 0x8E9900,
+CLASH,0x457030,data,s_rb,"char[] ""rb""",named,,
+CLASH,0x457508,data,g_font_tag_names,char[9][8],named,"nombres de |f: 0x16b,0x16a,0x33b,0x33a,22x18,04x05,00x22,00x18,00x13",
+CLASH,0x457550,data,g_video_modes,"struct {int32 w,h,bpp}[4]",named,REMASTER §15.C,índice 0 (640×400) nunca se usa
+CLASH,0x4580F0,data,s_clash_cfg,"char[] ""clash.cfg""",named,cfg_load/cfg_save,
+CLASH,0x45CF60,data,g_tutorial_texts,char[][500],named,"lea eax,[edx*4+0x45CF60] (edx=idx*125) en 0x432F2E → draw_text_box",
+CLASH,0x461E50,data,g_hud_buttons_tmpl,ButtonPanel,named,plantilla: F1-CONFIGURACION … F7-BIBLIOTECA,alias: g_panel_topbar
+CLASH,0x478158,data,g_confirm_dialogs,DialogDesc[] (0x18 B),hypothesis,"dialog_open(0x8EB120, 0x478158) con Esc; +8 → 0x47C154 '¿DESEAS SALIR DEL JUEGO?'",
+CLASH,0x478448,data,g_unit_types,UnitType[42] (0x58 B; +0x1D codigo),named,map_spawn_unit: type*0x58,
+CLASH,0x478474,data,g_unit_type_names,struct (0x58 B; nombre en +0),hypothesis,"lea edx,[ecx+0x478474] con ecx=i*0x58 en 0x444627",
+CLASH,0x479360,data,g_building_types,BuildingType[] (0xA0 B; +0x24 nombre),named,map_spawn_object: type*0xA0,"nombre en +0x24 (= 0x479384 + i*0xA0, usado por draw_text en 0x41DA09/0x444EDF)"
+CLASH,0x47A928,data,g_missions,"Mission[] (0x88 B; +0 flag, +4 nombre del .map)",named,"0x40FAC1: lea edx,[ecx*8+0x47A92C] con ecx = id*17",
+CLASH,0x47BF1E,data,g_material_names,char[7][0x14],named,MERCURIO..ALTA TECNOLOGIA,
+CLASH,0x47EEF0,data,g_gfx_pitch,int32_t,named,gfx_set_target_size; stride de los blits 0x4468D0..0x447520,alias: g_target_w
+CLASH,0x47EEF4,data,g_gfx_height,int32_t,named,gfx_set_target_size,alias: g_target_h
+CLASH,0x47EEF8,data,g_clip_x1,int32 (inclusivo),named,gfx_set_clip,
+CLASH,0x47EEFC,data,g_clip_y1,int32 (inclusivo),named,gfx_set_clip,
+CLASH,0x481D54,data,g_dplay,IDirectPlay4A*,named,"CoCreateInstance(CLSID_DirectPlay, IID_IDirectPlay4A)",
+CLASH,0x481D9C,data,g_flc_chunk_buf,uint8_t*,named,malloc(0xC0000) en 0x4127E2; fread de chunks en 0x4129F0,
+CLASH,0x481DA8,data,g_ddsd,DDSURFACEDESC,named,dwSize=0x6C; usado por Lock; lpSurface en +0x24,lPitch (+0x10) nunca se lee
+CLASH,0x481E14,data,g_ddpal,IDirectDrawPalette*,named,CreatePalette(DDPCAPS_8BIT),
+CLASH,0x481E40,data,g_scroll_vy,int16 (−40..40),named,camera_scroll_update,
+CLASH,0x481E44,data,g_minimap_drag_last_y,int16,hypothesis,idem,
+CLASH,0x481E4C,data,g_minimap_drag_last_x,int16,hypothesis,camera_scroll_update: evita recalcular si el ratón no se movió,
+CLASH,0x481E50,data,g_scroll_vx,int16 (−40..40),named,camera_scroll_update,
+CLASH,0x482A38,data,g_last_tick_ms,DWORD,named,frame_tick: = timeGetTime() al marcar tick,
+CLASH,0x482A48,data,g_ticks_since_render,int8_t,named,frame_tick: render cada 2 ticks salvo g_detail==3,
+CLASH,0x482A58,data,g_tick_pending,int,named,frame_tick: 1 si pasaron >37 ms,
+CLASH,0x482B50,data,g_clip_x0,int32,named,gfx_set_clip,
+CLASH,0x482B54,data,g_clip_y0,int32,named,gfx_set_clip,
+CLASH,0x4830E0,data,g_sessions,struct[] (0x75 B),named,net_session_at,
+CLASH,0x4838D0,data,g_mouse_buttons,uint8_t,named,bit0 izq. bit1 der. en WM_*BUTTON*,
+CLASH,0x4838E0,data,g_menu_bg_buf,uint8_t*,hypothesis,malloc(ancho*alto) en 0x425658 con 640×480; free en 0x425896,solo menús
+CLASH,0x483900,data,g_keys_pressed,uint8_t[256],named,keyboard_snapshot(0x483900) en bucles de menú,
+CLASH,0x483B40,data,g_landing_units,struct{int16 type; int32 val}[12],named,esp_nfo_read: lista de unidades que bajan,
+CLASH,0x483BA0,data,g_dds_back,IDirectDrawSurface*,named,GetAttachedSurface(DDSCAPS_BACKBUFFER),
+CLASH,0x483BA4,data,g_ddraw,IDirectDraw*,named,"DirectDrawCreate(0,&p,0) en 0x414A61",
+CLASH,0x483BA8,data,g_dds_primary,IDirectDrawSurface*,named,"CreateSurface PRIMARY|FLIP|COMPLEX, 2 back buffers",
+CLASH,0x483BAC,data,g_dp_session_desc,DPSESSIONDESC2*,named,dp_get_session_desc,
+CLASH,0x483BB0,data,g_mission_result,"int8_t (2 victoria, 3 derrota)",hypothesis,0x4117F0: won = (0x483BB0 == 2),
+CLASH,0x4886C0,data,g_font_22,SpcSprite[256],named,spc_load(FNT22.SPC); font id 4,alias: g_font4_fnt22
+CLASH,0x48A980,data,g_cursor_type,int8_t,named,índice en g_cursor_anims; cursor_place/cursor_select_type,
+CLASH,0x48A9D0,data,g_ticks_this_second,int,named,++ por tick; WM_TIMER 1 lo copia a 0x728860 y lo pone a 0,
+CLASH,0x48A9D8,data,g_dp_local_id,DPID,named,dp_create_player(&0x48A9D8); remitente de SendEx,
+CLASH,0x48AA14,data,g_frames_this_second,int,named,++ por frame; WM_TIMER 1 lo copia a 0x4A89F4,
+CLASH,0x48AA40,data,g_slot_desc,char[10][0x96],named,sav_list_slots,
+CLASH,0x48B020,data,g_btn_mapa,Button,named,"button_init(…,""F8 MAPA"")",
+CLASH,0x48B100,data,g_path_buf,char[],named,destino de sprintf para todas las rutas,
+CLASH,0x48D844,data,g_net_cmd_len,int,named,se reinicia a 0x10 tras cada tick,
+CLASH,0x48D860,data,g_font_22x18,SpcSprite[256],hypothesis,font id 1 en el switch; nunca se carga en CLASH,
+CLASH,0x48E860,data,g_suelos_tiles,"SprTile[256] {u16 w,u16 h,u8* data}",named,spr_load en 0x41535F; leído por draw_terrain,
+CLASH,0x490080,data,g_font_27a,SpcSprite[256],named,spc_load(FNT27A.SPC) en 0x425590; font id 5,alias: g_font5_fnt27a
+CLASH,0x491080,data,g_modem_phone,char[],hypothesis,dp_init_modem copia a DPAID_Phone,
+CLASH,0x491100,data,g_spc_det,SpcSprite[256],named,det%02d.spc,
+CLASH,0x492108,data,g_cfg_resolution,int16_t,named,"clash.cfg offset 0x10; opciones escriben 1/2/3 (0x42108A, 0x4210D5, 0x421127)",se aplica al entrar en partida (0x425840)
+CLASH,0x492120,data,g_btn_graf_fuerza,Button,named,"button_init(…,""Fuerza/Territorios""); solo 800 y 1024",
+CLASH,0x4921F8,data,g_terrain_set,int8_t,named,load_terrain_set(0x4921F8) en sav_load,
+CLASH,0x492200,data,g_font_18,SpcSprite[256],named,spc_load(FNT18.SPC); font id 3,alias: g_font3_fnt18
+CLASH,0x493204,data,g_sfx_enabled,int32_t,named,= g_cfg_flags[3] (0x41FD03),
+CLASH,0x493214,data,g_framebuf,uint8_t*,named,malloc(0xC0000) en 0x4154D3; destino de los blits; copiado a la superficie en 0x42C015,alias: g_backbuffer
+CLASH,0x5A4AC4,data,g_status_y,int16 (=g_screen_h−137),named,hud_layout; hud_draw_status,
+CLASH,0x5A4B8C,data,g_minimap_win_w,int16 (=158),named,hud_layout,
+CLASH,0x5A4B8E,data,g_minimap_win_h,int16 (=131),named,hud_layout,
+CLASH,0x5A4BA0,data,g_projectiles,Projectile[2000] (0x48 B),hypothesis,sav_save: 2000 x 0x48 con 2 referencias,
+CLASH,0x5C7E3C,data,g_video_mode,int16_t,named,escrito solo por change_video_mode (0x428D6A); fwrite en los .nfo,"índice actual en g_video_modes (1–3); alias: g_resolution_choice, g_video_mode_idx"
+CLASH,0x5C7E40,data,g_app_active,int,named,WM_ACTIVATEAPP: = wParam; app_main llama frame_tick solo si ≠0,
+CLASH,0x693E60,data,g_rank,int8_t,named,rank_name(0x693E60); compara con tipo+2 en map_spawn_unit,
+CLASH,0x693E61,data,g_detail_level,int8_t,named,"clash.cfg offset 0x0F; 0..3, por defecto 2 (0x415630)",
+CLASH,0x693E84,data,g_net_players,struct{DPID id; char name[13]; u8 state;...}[4] (0x14 B),named,net_build_player_table; estado 1/2/4,
+CLASH,0x693ED4,data,g_status_x,int16 (=350),named,hud_layout; hud_draw_status,
+CLASH,0x693EF4,data,g_game_time,"uint32_t (b0 s, b1 min, hi16 h)",named,sprintf Tiempo: %02d:%02d:%02d,alias: g_game_clock
+CLASH,0x693F00,data,g_font_4x5,SpcSprite[256],named,spc_load(FNT4X5.SPC); font id 0,alias: g_font0_fnt4x5
+CLASH,0x694FC0,data,g_map_width,int16_t,named,map_load,
+CLASH,0x694FC2,data,g_map_height,int16_t,named,map_load,
+CLASH,0x694FC4,data,g_cam_x,int32_t,named,clamp a g_map_width*40-g_view_w-1; culling con g_view_w,
+CLASH,0x694FC8,data,g_cam_y,int32_t,named,clamp a g_map_height*40-g_view_h-1,
+CLASH,0x694FCC,data,g_cam_dx,int32 (anterior−nuevo),named,camera_tick,
+CLASH,0x694FD0,data,g_cam_dy,int32 (anterior−nuevo),named,camera_tick,
+CLASH,0x694FD4,data,g_terrain_dirty,int32,named,render_frame redibuja el terreno si ≠0,
+CLASH,0x694FD8,data,g_map_cells,MapCell[100][100] (60 B por celda; índice x*100+y),named,map_load: (y + 100*x)*60,
+CLASH,0x7287F0,data,g_territory_view,uint8_t,hypothesis,=1 activa draw_territory_borders y tinte de territorio en el minimapa,
+CLASH,0x7287F4,data,g_hwnd,HWND,named,CreateWindowExA en app_main,
+CLASH,0x72882C,data,g_sfx_volume,int32_t,named,"clash.cfg offset 7; -3000..0 (centésimas de dB); 0x4320F0(1,v)",
+CLASH,0x728864,data,g_paused,int,named,WM_KEYDOWN VK_SPACE alterna; frame_tick → pause_loop,también habilita los trucos Ctrl+Alt
+CLASH,0x728C8C,data,g_net_is_host,int,named,net_host_session=1; DPSYS_HOST=1,
+CLASH,0x728C90,data,g_planets_colonized,int16_t,named,esp_nfo_read: ultimo campo; descripcion (p%d),
+CLASH,0x728CA0,data,g_msg,MSG,named,PeekMessage/GetMessage en app_main,
+CLASH,0x728CC0,data,g_space_credits,double[4],named,esp_nfo_read: exceso sobre credit_cap; sav_save lo vuelca al final,
+CLASH,0x729DC0,data,g_cursor_zone,uint8_t,named,cursor_zone_update,
+CLASH,0x729DC4,data,g_mouse_x,int32,named,GetCursorPos en 0x41A5B0,
+CLASH,0x729DC8,data,g_mouse_y,int32,named,GetCursorPos en 0x41A5B0,
+CLASH,0x729DCC,data,g_mouse_left,uint8_t,named,WM_LBUTTONDOWN/UP,
+CLASH,0x729DCD,data,g_mouse_middle,uint8_t,named,WM_MBUTTONDOWN/UP,
+CLASH,0x729DCE,data,g_mouse_button_down,uint8_t,hypothesis,condición de arrastre en el minimapa,alias: g_mouse_right
+CLASH,0x729DD0,data,g_cursor_cell_x,int32,named,(g_mouse_x+g_cam_x)/40 en game_tick,
+CLASH,0x729DD4,data,g_cursor_cell_y,int32,named,(g_mouse_y+g_cam_y)/40 en game_tick,
+CLASH,0x729DD8,data,g_in_game_hud,int32_t,hypothesis,=1 en 0x425840; apply_mode_layout elige HUD/menú según este valor,alias: g_hud_visible
+CLASH,0x729EE0,data,g_palcf,uint8_t[65536],named,load_palcf_palcs; sin lecturas en CLASH ni SPACE,traspuesta de PALCS
+CLASH,0x739EE0,data,g_btn_megaataque,Button,named,"button_init(…,""ALT+X MEGA ATAQUE"")",
+CLASH,0x739FB8,data,g_infopanel_w,int16 (=158),named,hud_layout,
+CLASH,0x739FEA,data,g_infopanel_h,int16 (=152),named,hud_layout,
+CLASH,0x73A000,data,g_palcs,uint8_t[256][256] [dst][color],named,"load_palcf_palcs; spc_draw_tint, gfx_tint_rect",
+CLASH,0x74FF40,data,g_terrain_buf,uint8_t*,named,malloc(1024*768) en 0x4154F2; render_game_view copia ancho*view_h a 0x882DA8,alias: g_terrain_cache
+CLASH,0x74FF44,data,g_key_ctrl,int,named,WM_KEYDOWN/UP VK_CONTROL,
+CLASH,0x74FFA0,data,g_spc_botones,SpcSprite[256],named,spc_load(.\Spc\botones.spc),
+CLASH,0x750FC0,data,g_font_27b,SpcSprite[256],named,spc_load(FNT27B.SPC); font id 6,alias: g_font6_fnt27b
+CLASH,0x752100,data,g_units,UnitRec[6][150] (0x4C8 B),named,map_spawn_unit; sav_save,
+CLASH,0x85F0A0,data,g_dp_connections,struct{GUID sp...; void* conn}[] (0x6C B),hypothesis,EnumConnections cb 0x42E9E0; 0x44EAA760 = DPSPGUID_MODEM,
+CLASH,0x85F700,data,g_pals,uint8_t[256][128] [color][nivel],named,"load_pals; spc_draw_shade, gfx_shade_rect",
+CLASH,0x86C000,data,g_net_cmdbuf_next,uint8_t[4][10000],named,net_poll_receive tick+2,
+CLASH,0x875C44,data,g_game_mode,uint8_t,hypothesis,=4 cambia la carga de unidades en map_load,
+CLASH,0x87BA40,data,g_fog_disabled,int32,hypothesis,≠0 ignora +0x04 (todo visible),
+CLASH,0x87BB28,data,g_minimap_x,int16,named,camera_scroll_update; origen de la imagen del minimapa,
+CLASH,0x87BB2A,data,g_minimap_y,int16,named,camera_scroll_update,
+CLASH,0x87CB60,data,g_tile_minimap_colors,uint8_t[256][16],named,minimap_build_base; 4 (40×40) o 16 (80×80) colores por tile,
+CLASH,0x87FE80,data,g_spc_dsp,SpcSprite[256],named,dsp.spc; decal de celda +0x06 (slot−0x10),
+CLASH,0x880E80,data,g_lobby_players,struct[4] (0x24 B),named,callback EnumPlayers 0x42E310,
+CLASH,0x881F60,data,g_players,PlayerRec[6] (0x260 B),named,"fwrite(0x881F60,0x260,6) en sav_save",ver partidas-red.md 1.2
+CLASH,0x881FD8,data,g_player_credits,double (campo +0x78 de g_players),named,credit_cap_for_rank; texto CREDITOS,
+CLASH,0x8820D8,data,g_player_materials,double[7] (campo +0x178 de g_players),named,0x402760 vende el maximo; nombres en 0x47BF1E,
+CLASH,0x88214A,data,g_player_color,uint8_t (stride 0x260 por jugador),hypothesis,color de minimapa/territorio por jugador,
+CLASH,0x882DA8,data,g_backdrop_buf,uint8_t*,named,malloc(1024*768) en 0x415511; destino de m640/m800/m1024.pcx,alias: g_static_layer
+CLASH,0x882DC0,data,g_palt030,uint8_t[256][256] [dst][src],named,load_palt(30),
+CLASH,0x892DE0,data,g_palt040,uint8_t[256][256] [dst][src],named,load_palt(40); fantasma de colocación de edificios,
+CLASH,0x8A2E00,data,g_minimap_buf,uint8_t[200*200],named,minimap_compose; fuente de minimap_draw_hud,
+CLASH,0x8AD3A0,data,g_palt020,uint8_t[256][256] [dst][src],named,load_palt(20),
+CLASH,0x8BD3A0,data,g_hud_unused_pt,"int16[2] (=265,52)",hypothesis,solo escrito en hud_layout,
+CLASH,0x8BD522,data,g_view_w,int16_t,named,apply_mode_layout: = g_screen_w; límites de cámara y minimapa,
+CLASH,0x8BE650,data,g_view_h,int16_t,named,apply_mode_layout: = h-0xA7 en partida; límites de cámara y minimapa,
+CLASH,0x8BF920,data,g_btn_diplo,Button,named,"button_init(…,""Relaciones/Posesiones""); solo 1024",
+CLASH,0x8BF9F8,data,g_load_slot,int8_t,named,esp_nfo_read cmd 2; planeta_nfo_write code -2,
+CLASH,0x8BF9FA,data,g_minimap_win_x,int16 (=178),named,hud_layout,
+CLASH,0x8BFA00,data,g_minimap_win_y,int16 (=g_screen_h−150),named,hud_layout; ojo: g_mission_id está en 0x8BFA02,
+CLASH,0x8BFA02,data,g_mission_id,int8_t,named,índice en g_missions,
+CLASH,0x8BFA20,data,g_buildings,BuildingRec[6][300] (0x3C B),named,map_spawn_object; sav_save,
+CLASH,0x8DA008,data,g_music_enabled,int32_t,named,= g_cfg_flags[4] (0x41FD09),
+CLASH,0x8DA020,data,g_hud_buttons,"ButtonPanel {i16 x,y; int count; Button[7] de 0xD8 B}",named,"button_panel_init(…,0x461E50); botones F1–F7",
+CLASH,0x8DB120,data,g_scratch_pal,uint8_t[768],named,paleta descartada al cargar SPC/SPR,
+CLASH,0x8DB520,data,g_key_shift,int,named,WM_KEYDOWN/UP VK_SHIFT,
+CLASH,0x8DB540,data,g_select_groups,uint8_t[10][150],named,"WM_KEYDOWN '0'..'9': con Ctrl guarda, sin Ctrl recupera la selección",grupos Ctrl+N ya existen
+CLASH,0x8DBBD4,data,g_game_seconds,int,named,WM_TIMER 1 ++,
+CLASH,0x8DBC20,data,g_spc_det_sb,SpcSprite[256],named,det_sb%02d.spc (sombras),
+CLASH,0x8DCC20,data,g_font_16a,SpcSprite[256],named,spc_load(FNT16A.SPC); font id 7,alias: g_font7_fnt16a
+CLASH,0x8DDC60,data,g_quit_to_menu,int,hypothesis,esp_nfo_read cmd 1; DPSYS_SESSIONLOST,
+CLASH,0x8DDC80,data,g_font_13,SpcSprite[256],named,spc_load(FNT13.SPC); font id 2,alias: g_font2_fnt13
+CLASH,0x8DEC80,data,g_net_cmdbuf,uint8_t[4][10000],named,net_lockstep_exchange; emisores cmd_*,
+CLASH,0x8E88C0,data,g_infopanel_x,int16 (=4),named,hud_layout; hud_draw_info_panel,
+CLASH,0x8E88C2,data,g_infopanel_y,int16 (=g_screen_h−158),named,hud_layout,
+CLASH,0x8E88E0,data,g_spc_misc,SpcSprite[256],named,spc_load(.\Spc\misc.spc),
+CLASH,0x8E98E0,data,g_cfg_flags,int32_t[7],named,"cfg_load: bytes 0–6 → ventanas rápidas, efectos, sombras, sonido, música, ayuda cursor, guía",rótulos en 0x422AF0
+CLASH,0x8E9900,data,g_spc_cursores,SpcSprite[256],named,spc_load(.\Spc\cursores.spc); slots 1–3 = tramas de niebla,alias: g_spr_cursores
+CLASH,0x8EC300,data,g_font_16b,SpcSprite[256],named,spc_load(FNT16B.SPC); font id 8,alias: g_font8_fnt16b
+CLASH,0x8ED310,data,g_net_last_tick,uint32_t[4],named,net_exec_commands guarda el tick recibido,
+CLASH,0x8EFA60,data,g_btn_territorios,Button,named,"button_init(…,""F11 Normal/Territorios"")",
+CLASH,0x8EFB38,data,g_radar_available,int32,hypothesis,0x419460: misión con flag o edificio del jugador; si 0 → MAPA NO DISPONIBLE,
+CLASH,0x8F1E60,data,g_screen_w,int16_t,named,REMASTER §15.C,
+CLASH,0x8F1E62,data,g_screen_h,int16_t,named,REMASTER §15.C,
+CLASH,0x8F1E70,data,g_prev_frame,uint8_t*,hypothesis,malloc(1024*768) en 0x415530; copia del cuadro en 0x42C040; fuente al restaurar el cursor,alias: g_frame_copy
+CLASH,0x8F1E74,data,g_tick_count,int,named,++ en cada game_logic_step y por segundo en pausa,alias: g_net_tick
+CLASH,0x8F1E84,data,g_player,int8_t,named,jugador local en todos los .nfo/.sav,
+CLASH,0x8F1EC0,data,g_btn_pantalla,Button,named,"button_init(…,""F9 PANTALLA"")",
+CLASH,0x8F1F98,data,g_music_volume,int32_t,named,clash.cfg offset 0x0B; -3000..0,
+CLASH,0x8F1F9C,data,g_dp_guid_ptr,GUID*,hypothesis,se copia a guidApplication en Open,
+CLASH,0x8F1FC0,data,g_cursor_anims,Anim[30] (0x18 B),named,"game_init: anim_init(0x8F1FC0+i*0x18, 0x454340+i*12)",
+CLASH,0x8F2298,data,g_open_panel,int16_t,hypothesis,"F1→0, F2→10, F3→5, F4→0xE, F5→0xC, F6→0xD, F7→6",
+CLASH,0x8F22A0,data,g_minimap_base,uint8_t[200*200] (pitch 2*g_map_width),named,minimap_build_base; guardado en partida (40000 B),
+CLASH,0x8FBEE0,data,g_final_mission,int,named,esp_nfo_read cmd 3; reproduce Final%02d.mpg,
+CLASH,0x447C70,range,CRT,end=0x4525A0,library,desde los stubs de import (DirectSoundCreate) hasta el fin de .text: CRT estática de MSVC 5.0,
+SPACE,0x406890,func,recount_planets,void recount_planets(void),named,pone a 0 empire+0x38 y cuenta planetas por dueno,
+SPACE,0x40B250,func,load_palcf_palcs,void load_palcf_palcs(void),named,"palcf→0x73FA80 (sin lecturas), palcs→0x74FAE0",
+SPACE,0x40C290,func,text_count_spaces,int text_count_spaces(const char* s),named,llamada por draw_text en 'J',
+SPACE,0x40C2B0,func,text_wrap_line,"int text_wrap_line(const char* s, char* out, char* font, uint8_t* color, int maxw)",named,|f contra 0x43E430..0x43E450,
+SPACE,0x40C6B0,func,text_width,"int16_t text_width(const char* s, int font)",named,llamada al inicio de draw_text,
+SPACE,0x40C990,func,text_max_width,"int text_max_width(const char* s, int font)",named,análoga a CLASH 0x4139F0,
+SPACE,0x40CC90,func,text_count_lines,int text_count_lines(const char* s),named,mismo cuerpo que CLASH 0x413EF0,
+SPACE,0x40CCC0,func,draw_glyph,"void draw_glyph(int x, int y, uint8_t ch, int font, uint8_t color, int unused, uint8_t* dst)",named,font 5 → 0x430870; resto → 0x430A70,
+SPACE,0x40CD60,func,draw_text,"void draw_text(int x, int y, const char* s, int font, char align, int width, uint8_t color, uint8_t* dst)",named,mismo parser que CLASH 0x413FF0; 342 llamadas,
+SPACE,0x40D230,func,draw_text_box,"void draw_text_box(int x, int y, int w, int h, const char* s, int font, char align, uint8_t color, uint8_t* dst)",named,_chkstk(0x18774); llama a 0x40C2B0 y 0x40CD60,
+SPACE,0x40D430,func,ddraw_set_mode,"int ddraw_set_mode(int16 idx, HWND hwnd)",named,mismo cuerpo que CLASH:0x414A50 (lee 0x43E458+idx*12),SetDisplayMode real
+SPACE,0x40D570,func,release_surfaces,void release_surfaces(void),named,mismo cuerpo que CLASH:0x414B90,
+SPACE,0x40D5B0,func,ddraw_set_palette,void ddraw_set_palette(PALETTEENTRY pal[256]),named,mismo cuerpo que CLASH:0x414BD0,
+SPACE,0x40D610,func,surface_lock,void* surface_lock(IDirectDrawSurface* s),named,Lock(+0x64) con 0x467668,
+SPACE,0x40D660,func,surface_unlock,void surface_unlock(IDirectDrawSurface* s),named,Unlock (+0x80),
+SPACE,0x40D670,func,surface_flip,void surface_flip(void),named,primary->Flip (+0x2C) con Restore,
+SPACE,0x40DBF0,func,process_running,,named,RUNTIME.md (P1),
+SPACE,0x40DE90,func,load_space_resources,void load_space_resources(void),named,spc_load de fuentes/menús/sprites; pcx_load(.\Img\fondo.pcx → 0x80B174),
+SPACE,0x40E150,func,game_init,int game_init(void),hypothesis,SetTimer 1/2/3 (push 0x3E8 en 0x40E5CE),alias: space_init
+SPACE,0x40E960,func,game_shutdown,void game_shutdown(void),named,KillTimer 1..3; llamada en WM_CLOSE,
+SPACE,0x40EA90,func,app_main,int app_main(HINSTANCE hInst),named,"RegisterClassExA(0x761F60), CreateWindowExA, mismo bucle que CLASH",
+SPACE,0x40ECB0,func,show_rank_screen,"void show_rank_screen(int8_t level, int mode)",named,.\Img\Nivel%02d.pcx; paleta.pcx; presenta en 0x40ED5E (sitio del crash P4),
+SPACE,0x40F2B0,func,esp_nfo_write,"int esp_nfo_write(void* fleet, int8_t cmd, int16_t slot)",named,fputs EFSCLANSESP; cmd; ... ; llama esp_sav_write,
+SPACE,0x40F650,func,sav_save,int sav_save(int8_t slot),named,fputs EFSCLANSESP + descripcion 0x96 (Campana Espacial (p%d)),alias: save_game_sav
+SPACE,0x40FC20,func,sav_load,"int sav_load(int8_t slot, int flag)",named,"acepta EFSCLANSESP/EFSCLANSSAV; si SSAV -> esp_nfo_write(0,2,slot)",
+SPACE,0x410390,func,sav_list_slots,void sav_list_slots(void),named,sprintf s%d.sav; EFSCLANSESP/EFSCLANSSAV,
+SPACE,0x4104A0,func,esp_sav_load,int esp_sav_load(int fleet_arrived),named,fopen esp.sav; EFSCLANSESPTEMP; validado 348361 B,
+SPACE,0x410B90,func,esp_sav_write,int esp_sav_write(int param),named,fputs EFSCLANSESPTEMP,alias: write_esp_sav
+SPACE,0x411050,func,load_planeta_nfo,int load_planeta_nfo(void),hypothesis,igual que 0x4118D0 y además estado de la campaña,alias: planeta_nfo_read_result
+SPACE,0x4117E0,func,esp_sav_peek,int esp_sav_peek(void),named,"solo cabecera de esp.sav (rango, variante, planeta)",
+SPACE,0x4118D0,func,read_planeta_conf_nfo,int read_planeta_conf_nfo(void),named,"planeta.nfo y luego conf.nfo (EFSCLANSPLANETA): i16 → 0x5C16E6, u8 → 0x98A244, 8×i32",alias: planeta_nfo_read_command
+SPACE,0x411C50,func,space_quit,void space_quit(void),named,"PostMessageA(hwnd, WM_CLOSE)",
+SPACE,0x411CD0,func,recom_nfo_read,int recom_nfo_read(void),named,fopen recom.nfo; EFSCLANSRECOM; DeleteFileA,alias: read_recom_nfo
+SPACE,0x4123C0,func,cursor_redraw,void cursor_redraw(void),named,GetCursorPos; caja de 40x40 como CLASH 0x41A5B0,
+SPACE,0x412890,func,draw_fondo,void draw_fondo(void),named,copia view_h filas de g_screen_w desde fondo + (y+0x5C1708)*0x618 + 0x5C1704,sin recorte contra 1560×1310
+SPACE,0x413050,func,game_logic_step,void game_logic_step(void),hypothesis,llamada una vez por tick desde frame_tick,
+SPACE,0x413540,func,draw_hud_panels,void draw_hud_panels(void),hypothesis,"ramas por 0x5C16E6 (x=0x270 modo>=2, x=0x30E modo 3), y = h-k",
+SPACE,0x4153B0,func,load_ship_sprites,,named,"sprintf .\spc\ni%02d%d.spc y .\spc\N%02d%d.spc; 4 variantes, bloques de 0xB000 B",
+SPACE,0x41BD80,func,check_promotion,int check_promotion(int won),named,"umbrales {1,3,5,7,9} planetas; rango++; show_rank_screen",
+SPACE,0x41C5D0,func,cursor_place,void cursor_place(void),named,mismo cuerpo que CLASH 0x42ABE0 con 0x8107C0,
+SPACE,0x41CBB0,func,frame_tick,void frame_tick(void),named,"timeGetTime en 0x41CBC1; cmp edx,0x25 en 0x41CBE0",punto de Q2: imm8 en 0x41CBE2
+SPACE,0x41CD10,func,wnd_proc,"LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)",named,lpfnWndProc = 0x761F68,Ghidra no la crea como función
+SPACE,0x420B00,func,set_screen_size,,named,REMASTER §15.C,
+SPACE,0x420D80,func,ddraw_set_mode_main,int ddraw_set_mode_main(int16 idx),named,"ddraw_set_mode(idx, hwnd 0x69806C); no cambia 0x5C16E6",usada con 1 al arrancar (0x40E18C)
+SPACE,0x420DA0,func,clear_window_gdi,void clear_window_gdi(void),named,FillRect 8000×8000 negro,
+SPACE,0x420DE0,func,change_video_mode,,named,REMASTER §15.C,envoltorio; el SetDisplayMode real está en 0x40D430
+SPACE,0x420E30,func,rank_name,"void rank_name(char* out, int8_t rank)",hypothesis,usada en la descripcion de sav_save como en CLASH 0x4276D0,
+SPACE,0x420EF0,func,present_framebuf,int present_framebuf(void),named,lock back; copia 0x487D0C ancho*alto; unlock; flip,sitio P2/P4 0x420F03
+SPACE,0x420F50,func,clear_surface,,named,REMASTER §15.C,
+SPACE,0x421140,func,pump_one_message,void pump_one_message(void),named,PeekMessage+GetMessage+Translate+Dispatch,
+SPACE,0x421190,func,pause_loop,void pause_loop(void),named,while(0x69A1E4) {flip; pump_one_message},
+SPACE,0x429A80,func,empire_info_screen,void empire_info_screen(void),hypothesis,Creditos/Planetas Colonizados/Naves/Bonificaciones,
+SPACE,0x42F970,func,space_launch_attack,void space_launch_attack(void),hypothesis,"esp_nfo_write(fleet, 0|3) + space_quit; 3 si planetas == 24",
+SPACE,0x430410,func,gfx_set_clip,"void gfx_set_clip(int x0, int y0, int x1, int y1)",named,equivalente a CLASH:0x446830,
+SPACE,0x430470,func,gfx_set_target_size,"void gfx_set_target_size(int w, int h)",named,equivalente a CLASH:0x446890 (0x46488C/0x464890),
+SPACE,0x430870,func,spc_draw,"void spc_draw(int x, int y, const SpcSprite* s, uint8_t* dst)",named,mismo cuerpo que CLASH:0x446C90 (00 FF siempre fin de fila),alias: blit_rle
+SPACE,0x430A70,func,blit_rle_solid,"void blit_rle_solid(int x, int y, SpcSprite* s, uint8_t color, uint8_t* dst)",hypothesis,llamada por draw_glyph con color,
+SPACE,0x431340,func,spc_load,"int spc_load(const char* path, SpcSprite out[256], uint8_t pal[768])",named,misma firma y llamadas que CLASH:0x447760,
+SPACE,0x431750,func,srand,,crt,mismo cuerpo que CLASH:0x448110,
+SPACE,0x431760,func,rand,,crt,mismo cuerpo que CLASH:0x448120,
+SPACE,0x431790,func,sprintf,"int sprintf(char* out, const char* fmt, ...)",crt,,
+SPACE,0x431800,func,fclose,int fclose(FILE* f),crt,,
+SPACE,0x431880,func,malloc,void* malloc(size_t n),crt,,
+SPACE,0x431930,func,fgetc,int fgetc(FILE* f),crt,,
+SPACE,0x431960,func,free,void free(void* p),crt,HeapFree,
+SPACE,0x4319B0,func,fread,"size_t fread(void* buf, size_t size, size_t n, FILE* f)",crt,,
+SPACE,0x431B20,func,fopen,"FILE* fopen(const char* path, const char* mode)",crt,_fsopen(path mode 0x40),
+SPACE,0x431B40,func,fseek,,crt,mismo cuerpo que CLASH:0x447FD0,
+SPACE,0x431BE0,func,fwrite,,crt,mismo cuerpo que CLASH:0x448420,
+SPACE,0x431D30,func,clock,,crt,mismo cuerpo que CLASH:0x448570,
+SPACE,0x431E30,func,atoi,,crt,mismo cuerpo que CLASH:0x448670,
+SPACE,0x431E40,func,_chkstk,,crt,mismo cuerpo que CLASH:0x448680,
+SPACE,0x431E70,func,time,,crt,mismo cuerpo que CLASH:0x4486B0,
+SPACE,0x431FA0,func,fputs,,crt,mismo cuerpo que CLASH:0x4487E0,
+SPACE,0x431FF0,func,_strtime,,crt,mismo cuerpo que CLASH:0x4488E0,
+SPACE,0x4320B0,func,_strdate,,crt,mismo cuerpo que CLASH:0x4489A0,
+SPACE,0x437550,func,operator_new,,crt,mismo cuerpo que CLASH:0x448A90,
+SPACE,0x43A750,func,_filelength,,crt,mismo cuerpo que CLASH:0x452500,
+SPACE,0x43A7E0,func,_fileno,,crt,mismo cuerpo que CLASH:0x452590,
+SPACE,0x43C980,data,g_cursor_anim_defs,struct {int n; SpcSprite* bank; frames*}[37],named,"entradas 0-28 → 0x8107C0, 29-36 → 0x812A80",
+SPACE,0x43E458,data,g_video_modes,"struct {int32 w,h,bpp}[4]",named,REMASTER §15.C,índice 0 (640×400) nunca se usa
+SPACE,0x455C00,data,g_empires,EmpireRec[4] (0xF0 B),named,"fwrite(0x455C00+p*0xF0,0xF0) en esp_sav_write",
+SPACE,0x455C28,data,g_empire_credits,double (campo +0x28),named,Creditos: %7ld um,
+SPACE,0x4584A8,data,g_tutorial_texts,char[][500],named,"lea edx,[ecx*4+0x4584A8] en 0x4206AD",
+SPACE,0x46488C,data,g_gfx_pitch,int32_t,named,gfx_set_target_size (0x43047E),
+SPACE,0x46765C,data,g_flc_chunk_buf,uint8_t*,named,malloc(0xC0000) en 0x40BB32,
+SPACE,0x467668,data,g_ddsd,DDSURFACEDESC,named,dwHeight +8 (0x467670) y lPitch +0x10 (0x467678) usados por P4,
+SPACE,0x4676D4,data,g_ddpal,IDirectDrawPalette*,named,CreatePalette en 0x40D523,
+SPACE,0x467958,data,g_last_tick_ms,DWORD,named,frame_tick,
+SPACE,0x467970,data,g_tick_pending,int,named,frame_tick,
+SPACE,0x467F78,data,g_returning_units,int32 n; {int16 type; int32 val}[],named,planeta.nfo code -3,
+SPACE,0x468430,data,g_dds_back,IDirectDrawSurface*,named,GetAttachedSurface en 0x40D505,
+SPACE,0x468434,data,g_ddraw,IDirectDraw*,named,DirectDrawCreate en 0x40D441,
+SPACE,0x468438,data,g_dds_primary,IDirectDrawSurface*,named,CreateSurface primaria en 0x40D4E2,
+SPACE,0x47CD00,data,g_font_22,SpcSprite[256],named,spc_load(FNT22.SPC); font id 8,
+SPACE,0x47DD04,data,g_cursor_type,int16_t,named,índice en 0x98A360 (cursor_place),
+SPACE,0x47F7A0,data,g_font_22x18,SpcSprite[256],named,spc_load(FNT22X18.SPC); font id 5 (multicolor),
+SPACE,0x486D00,data,g_font_18,SpcSprite[256],named,spc_load(FNT18.SPC); font id 7,
+SPACE,0x487D04,data,g_sfx_enabled,int32_t,named,del .nfo (CLASH 0x493204); condiciona 0x41F670,
+SPACE,0x487D0C,data,g_framebuf,uint8_t*,named,malloc(1024*768) en 0x40E1CA; present_framebuf la copia a la superficie,
+SPACE,0x5C16E6,data,g_video_mode_idx,,named,REMASTER §15.C,índice de modo actual (1–3)
+SPACE,0x5C1704,data,g_fondo_scroll_x,int32_t,named,= g_galaxy_cam_x/8; offset x en draw_fondo,
+SPACE,0x5C1708,data,g_fondo_scroll_y,int32_t,named,= g_galaxy_cam_y/8; fila en draw_fondo (stride 0x618),
+SPACE,0x5C1730,data,g_app_active,int,named,WM_ACTIVATEAPP,
+SPACE,0x5D7778,data,g_game_clock,struct {u8 s; u8 min; u16 h},named,WM_TIMER 1,
+SPACE,0x5D7780,data,g_font_4x5,SpcSprite[256],named,spc_load(FNT4X5.SPC); font id 0,
+SPACE,0x69806C,data,g_hwnd,HWND,named,CreateWindowExA en app_main,
+SPACE,0x698078,data,g_sfx_volume,int32_t,named,"del .nfo (CLASH 0x72882C); 0x4203A0(1,v)",
+SPACE,0x69807C,data,g_is_demo,int,hypothesis,ESTO ES UNA DEMO...,
+SPACE,0x698080,data,g_rank,int8_t,named,primer byte de esp.sav; tambien recibe el code de planeta.nfo,
+SPACE,0x69A1E4,data,g_paused,int,named,WM_KEYDOWN VK_SPACE alterna,
+SPACE,0x69A620,data,g_msg,MSG,named,PeekMessage/GetMessage,
+SPACE,0x69A740,data,g_ships,ShipRec[4][150] (0x388 B),named,esp_sav_write,
+SPACE,0x724FE0,data,g_planets,PlanetRec[25] (0x1108 B),named,"esp_sav_write; +0x1C mapa, +0x2A nombre",
+SPACE,0x73F9C4,data,g_mouse_x,int,named,WM_MOUSEMOVE y GetCursorPos,
+SPACE,0x73F9C8,data,g_mouse_y,int,named,WM_MOUSEMOVE y GetCursorPos,
+SPACE,0x73F9CC,data,g_mouse_left,uint8_t,named,WM_LBUTTONDOWN/UP,
+SPACE,0x73F9CD,data,g_mouse_middle,uint8_t,named,WM_MBUTTONDOWN/UP,
+SPACE,0x73F9CE,data,g_mouse_right,uint8_t,named,WM_RBUTTONDOWN/UP,
+SPACE,0x73F9D8,data,g_in_game_hud,int32_t,hypothesis,del .nfo (CLASH 0x729DD8); set_screen_size elige HUD o menú,
+SPACE,0x773B20,data,g_starmap,"int16 w,h; int32 x2; cell[125][125] (12 B)",named,esp_sav_write fuerza 0x7D,
+SPACE,0x773B24,data,g_galaxy_cam_x,int32_t,named,clamp a límite-g_view_w-1 (SPACE.c l. 17762); guardada en s%d.sav/esp.sav,
+SPACE,0x773B28,data,g_galaxy_cam_y,int32_t,named,ídem con g_view_h,
+SPACE,0x7AAE90,data,g_backdrop_buf,uint8_t*,named,malloc(0xC0000) en 0x40E1AB; destino de m*.pcx en set_screen_size,
+SPACE,0x7AAE94,data,g_load_slot,int8_t (100 = ninguna),named,planeta.nfo code -2,
+SPACE,0x807180,data,g_view_w,int16_t,named,set_screen_size: = g_screen_w (0x420C49); clamp de la cámara galáctica,
+SPACE,0x807188,data,g_view_h,int16_t,named,set_screen_size: h o h-0xA7 (0x420C71/0x420D43),
+SPACE,0x80B174,data,g_fondo_buf,uint8_t*,named,malloc(0x1F2ED0 = 1560*1310) en 0x40E4C3; fondo.pcx,
+SPACE,0x80B180,data,g_music_enabled,int32_t,named,del .nfo (CLASH 0x8DA008); si !=0 → música (0x41F330),
+SPACE,0x80D780,data,g_font_13,SpcSprite[256],named,spc_load(FNT13.SPC); font id 6,
+SPACE,0x8107C0,data,g_spr_cursores,SpcSprite[256],named,spc_load(CURSORES.SPC) en 0x40DE90,
+SPACE,0x812A80,data,g_spr_cursor2,SpcSprite[256],named,spc_load(CURSOR2.SPC) en 0x40DE90,
+SPACE,0x817090,data,g_screen_w,int16_t,named,REMASTER §15.C,
+SPACE,0x817092,data,g_screen_h,int16_t,named,REMASTER §15.C,
+SPACE,0x8170A0,data,g_prev_frame,uint8_t*,hypothesis,malloc(1024*768) en 0x40E1E9; copia de 0x487D0C en 0x41CCAF,
+SPACE,0x8170AC,data,g_galaxy_variant,uint8_t 0..3,named,rand()&3 en nueva campana; indice de 0x4555C0,
+SPACE,0x98A244,data,g_player_empire,int8_t,hypothesis,u8 del bloque común de los .nfo; índice de Nivel%02d/Prot%02d y uni%d.spc,alias: g_player
+SPACE,0x98A33C,data,g_music_volume,int32_t,named,"del .nfo (CLASH 0x8F1F98); 0x4203A0(0,v)",
+SPACE,0x98A360,data,g_cursor_anims,Anim[37] (0x18 B),named,init desde 0x43C980 (12 B por entrada),
+SPACE,0x4316A0,range,CRT,end=0x43A7F0,library,desde los stubs de import (DirectDrawCreate) hasta el fin de .text: CRT estática de MSVC 5.0,

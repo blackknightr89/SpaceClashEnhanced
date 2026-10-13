@@ -30,6 +30,8 @@ SC_SCALING="${SC_SCALING:-fit}"                         # scaled: fit (llenar el
 SC_FILTER="${SC_FILTER:-auto}"                          # scaled+opengl: auto | nearest | sharp | smooth | xbr | crt
 SC_GAME_RES="${SC_GAME_RES:-auto}"                      # resolución del juego (CLASH.CFG): auto (1024 al instalar de cero, si no keep) | keep | 640 | 800 | 1024
 SC_PATCH="${SC_PATCH:-1}"                               # 1 = aplicar parches de compatibilidad (ver sección 5b)
+SC_RES="${SC_RES:-}"                                    # resolución panorámica (experimental) WxH, "off" o vacío = no tocar
+SC_RUNTIME="${SC_RUNTIME:-1}"                           # 1 = runtime de mejoras scenh.dll (velocidad, avisos…; sección 5c)
 SC_VDESKTOP="${SC_VDESKTOP:-1}"                         # 1 = ejecutar en escritorio virtual de Wine
 SC_VDESKTOP_RES="${SC_VDESKTOP_RES:-auto}"              # tamaño del escritorio virtual (auto = monitor en scaled, 1024x768 en window)
 SC_GAMESCOPE="${SC_GAMESCOPE:-0}"                       # 1 = envolver con gamescope (escalado a pantalla completa)
@@ -361,6 +363,103 @@ apply_patches() {
 }
 
 # --------------------------------------------------------------------------- #
+#  5c. Runtime de mejoras (scenh.dll, carpeta runtime/ del repositorio)
+# --------------------------------------------------------------------------- #
+#  Una DLL propia que el juego carga al arrancar y que aplica mejoras en memoria (velocidad de juego con
+#  +/-, menos consumo de CPU, avisos en pantalla; opciones en scenh.ini junto al juego). Para que la cargue
+#  se renombra el import "GDI32.dll" de CLASH.EXE y SPACE.EXE a "SCENH.dll" (9 bytes, mismo largo; la DLL
+#  reenvía a gdi32 lo único que el juego usaba de ella). Antes de los parches de compatibilidad se vuelve
+#  al nombre original, así que reinstalar o desactivarlo (--no-runtime) deja los EXE como en la sección 5b.
+#
+#  Formato: ARCHIVO|offset del nombre|sha256 con parches 5b + runtime
+RUNTIME_IMPORTS=(
+  "CLASH.EXE|0x806d4|eac913cae176c501d718fcf3a63a39539458834bff97511d5813fb3deaa0f353"
+  "SPACE.EXE|0x65aaa|142ef3a4530165765c1bc886e3b93880997b392bddffa4e34c5abcfe164137ea"
+)
+
+import_name() {   # import_name ARCHIVO OFFSET → GDI32.dll | SCENH.dll | otro
+    dd if="$1" bs=1 skip=$(($2)) count=9 status=none 2>/dev/null
+}
+
+set_import_name() {   # set_import_name NOMBRE: GDI32.dll (original) o SCENH.dll (runtime) en ambos EXE
+    local e f off h cur
+    for e in "${RUNTIME_IMPORTS[@]}"; do
+        IFS='|' read -r f off h <<<"$e"
+        [[ -f "$GAME_DIR/$f" ]] || continue
+        cur=$(import_name "$GAME_DIR/$f" "$off")
+        [[ "$cur" == "$1" ]] && continue
+        [[ "$cur" == GDI32.dll || "$cur" == SCENH.dll ]] || { warn "$f: import inesperado en $off ('$cur'); no se toca"; return 1; }
+        printf '%s' "$1" | dd of="$GAME_DIR/$f" bs=1 seek=$((off)) conv=notrunc status=none
+    done
+}
+
+ini_section_set() {   # ini_section_set ARCHIVO SECCIÓN CLAVE VALOR (crea la sección o la clave si faltan)
+    local f=$1 sec=$2 key=$3 val=$4
+    grep -q "^\[$sec\]" "$f" || printf '\n[%s]\n' "$sec" >>"$f"
+    if awk -v s="[$sec]" -v k="$key" '$0==s{f=1;next} /^\[/{f=0} f&&index($0,k"=")==1{found=1} END{exit !found}' "$f"; then
+        sed -i "/^\[$sec\]/,/^\[/ s|^$key=.*|$key=$val|" "$f"
+    else
+        sed -i "/^\[$sec\]/a $key=$val" "$f"
+    fi
+}
+
+check_res() {   # valida --res antes de empezar a instalar
+    [[ -z "$SC_RES" || "$SC_RES" == off ]] && return 0
+    [[ "$SC_RES" =~ ^([0-9]+)x([0-9]+)$ ]] || die "--res inválido: $SC_RES (p. ej. 1920x1080, u off)"
+    local w=${BASH_REMATCH[1]} h=${BASH_REMATCH[2]}
+    (( w >= 1024 && w <= 2560 && w % 8 == 0 && h >= 600 && h <= 1600 && w * h >= 1024 * 768 )) \
+        || die "--res $SC_RES fuera de rango: ancho 1024–2560 (múltiplo de 8), alto 600–1600, área ≥ 1024x768"
+}
+
+set_runtime_res() {   # --res WxH: modo 1024 del juego → WxH (scenh.ini [resolucion]); --res off lo desactiva
+    local ini="$GAME_DIR/scenh.ini" w h
+    [[ -z "$SC_RES" ]] && return
+    if [[ "$SC_RES" == off ]]; then
+        ini_section_set "$ini" resolucion activar 0; ok "Resolución panorámica desactivada"; return
+    fi
+    check_res
+    w=${SC_RES%x*}; h=${SC_RES#*x}
+    ini_section_set "$ini" resolucion activar 1
+    ini_section_set "$ini" resolucion ancho "$w"
+    ini_section_set "$ini" resolucion alto "$h"
+    SC_GAME_RES=1024   # la resolución panorámica reemplaza al modo 1024 del juego
+    ok "Resolución panorámica (experimental): ${w}x${h}"
+}
+
+find_runtime_dll() {   # imprime la ruta de scenh.dll: la del ZIP del release o la compilada aquí
+    local f
+    for f in "$SCRIPT_DIR/runtime/scenh.dll" "$SCRIPT_DIR/runtime/build/scenh.dll"; do
+        [[ -f "$f" ]] && { echo "$f"; return; }
+    done
+    if [[ -f "$SCRIPT_DIR/runtime/Makefile" ]] && have make && have i686-w64-mingw32-gcc; then
+        make -s -C "$SCRIPT_DIR/runtime" >&2 && [[ -f "$SCRIPT_DIR/runtime/build/scenh.dll" ]] \
+            && echo "$SCRIPT_DIR/runtime/build/scenh.dll"
+    fi
+}
+
+setup_runtime() {
+    if [[ "$SC_RUNTIME" != 1 || "$SC_PATCH" != 1 ]]; then
+        set_import_name GDI32.dll
+        [[ "$SC_RUNTIME" != 1 ]] && ok "Runtime de mejoras desactivado (--no-runtime)"
+        return
+    fi
+    local dll
+    dll=$(find_runtime_dll)
+    if [[ -z "$dll" ]]; then
+        warn "No está scenh.dll (runtime/) ni MinGW para compilarla (pacman -S mingw-w64-gcc): se instala sin mejoras"
+        set_import_name GDI32.dll
+        return
+    fi
+    cp -f "$dll" "$GAME_DIR/scenh.dll"
+    if [[ ! -f "$GAME_DIR/scenh.ini" ]]; then
+        cp "$SCRIPT_DIR/runtime/scenh.ini" "$GAME_DIR/scenh.ini"
+    fi
+    set_import_name SCENH.dll || { set_import_name GDI32.dll; return; }
+    set_runtime_res
+    ok "Runtime de mejoras instalado: velocidad con + y - durante la partida (opciones en $GAME_DIR/scenh.ini)"
+}
+
+# --------------------------------------------------------------------------- #
 #  6. Modo de pantalla: DirectDraw + renderizador de vídeo
 # --------------------------------------------------------------------------- #
 #  El juego usa DirectDraw 8 bits con paleta a 640x480/800x600 (y 1024x768) y
@@ -478,7 +577,7 @@ set_game_res() {
     # jugador eligió en Opciones.
     [[ "$res" == auto ]] && { [[ "${NEW_CFG:-0}" == 1 ]] && res=1024 || res=keep; }
     case "$res" in
-        keep) return ;;
+        keep) return 0 ;;
         640) idx=1 ;; 800) idx=2 ;; 1024) idx=3 ;;
         *) die "SC_GAME_RES inválido: $SC_GAME_RES (auto|keep|640|800|1024)" ;;
     esac
@@ -799,6 +898,7 @@ cmd_install() {
     [[ "$SC_FILTER" =~ ^(auto|nearest|sharp|smooth|xbr|crt)$ ]] || die "SC_FILTER inválido: $SC_FILTER (auto|nearest|sharp|smooth|xbr|crt)"
     [[ "$SC_GAME_RES" =~ ^(auto|keep|640|800|1024)$ ]] || die "SC_GAME_RES inválido: $SC_GAME_RES (auto|keep|640|800|1024)"
     log "Instalando Space Clash en $SC_ROOT"
+    check_res
     check_deps
     if [[ -f "$CD_DIR/UNCLASH.EXE" && "${FORCE:-0}" != 1 ]]; then
         ok "CD ya extraído en $CD_DIR (no hace falta la imagen)"
@@ -809,7 +909,9 @@ cmd_install() {
     fi
     create_prefix
     install_files
+    set_import_name GDI32.dll   # los parches 5b se verifican sobre el EXE sin el runtime
     apply_patches
+    setup_runtime
     setup_ddraw
     set_game_res
     setup_videos_ai
@@ -846,10 +948,22 @@ cmd_doctor() {
     chk "Animaciones ANI/*.FLC"                    "(( \$(ls \"$GAME_DIR/ANI\" 2>/dev/null | wc -l) > 300 ))"
     if [[ "$SC_PATCH" == 1 ]]; then
         local e f orig final rest
+        local rt=0 off h
+        [[ -f "$GAME_DIR/scenh.dll" && $(import_name "$GAME_DIR/CLASH.EXE" 0x806d4) == SCENH.dll ]] && rt=1
         for e in "${PATCHES[@]}"; do
             IFS='|' read -r f orig final rest <<<"$e"
-            chk "$f parcheado"                     "[[ \$(sha256sum \"$GAME_DIR/$f\" | cut -c1-64) == $final ]]"
+            if ((rt)); then
+                for h in "${RUNTIME_IMPORTS[@]}"; do [[ $h == "$f|"* ]] && IFS='|' read -r _ off final <<<"$h"; done
+            fi
+            chk "$f parcheado$( ((rt)) && echo ' (con runtime)')" "[[ \$(sha256sum \"$GAME_DIR/$f\" | cut -c1-64) == $final ]]"
         done
+        if ((rt)); then
+            ok "Runtime de mejoras activo (scenh.dll; opciones en scenh.ini$([[ -f "$GAME_DIR/scenh.log" ]] && echo '; registro en scenh.log'))"
+            local res; res=$(awk -F= '/^\[/{f=($0=="[resolucion]")} f&&$1=="activar"{a=$2} f&&$1=="ancho"{w=$2} f&&$1=="alto"{h=$2} END{if(a==1)print w"x"h}' "$GAME_DIR/scenh.ini")
+            [[ -n "$res" ]] && echo "    Resolución panorámica (experimental): $res en lugar de 1024x768"
+        else
+            echo "    Runtime de mejoras: no instalado (ver --no-runtime en la ayuda)"
+        fi
     fi
     if [[ -f "$GAME_DIR/ddraw.dll" ]]; then
         chk "Override ddraw=native para CLASH.EXE" "grep -A2 -i 'AppDefaults\\\\\\\\CLASH.EXE\\\\\\\\DllOverrides' \"$WINEPREFIX/user.reg\" | grep -qi native"
@@ -931,6 +1045,9 @@ Opciones (o variables de entorno equivalentes):
                       = 1024 en una instalación nueva; al reinstalar se conserva la elegida)
                       1024 = más área del mapa visible
   --no-patch          No aplicar el parche de compatibilidad (SC_PATCH=0)
+  --res WxH|off       EXPERIMENTAL: partida en WxH (p. ej. 1920x1080) en lugar de 1024x768,
+                      con más mapa visible; requiere el runtime (SC_RES)
+  --no-runtime        Sin el runtime de mejoras scenh.dll (velocidad con +/-, menos CPU) (SC_RUNTIME=0)
   --no-vdesktop       Sin escritorio virtual de Wine      (SC_VDESKTOP=0)
   --vdesktop-res WxH  Tamaño del escritorio virtual       (SC_VDESKTOP_RES, def: auto)
   --gamescope         Envolver con gamescope (escalado)   (SC_GAMESCOPE=1)
@@ -969,6 +1086,8 @@ while (($#)); do
         --ddraw)        [[ $2 == cnc ]] && SC_DISPLAY=scaled || SC_DISPLAY=window; shift ;;   # compatibilidad
         --cd-letter)    SC_CD_LETTER=$2; shift ;;
         --no-patch)     SC_PATCH=0 ;;
+        --no-runtime)   SC_RUNTIME=0 ;;
+        --res)          SC_RES=$2; shift ;;
         --no-vdesktop)  SC_VDESKTOP=0 ;;
         --vdesktop-res) SC_VDESKTOP_RES=$2; shift ;;
         --gamescope)    SC_GAMESCOPE=1 ;;
