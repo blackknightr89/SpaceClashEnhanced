@@ -166,7 +166,7 @@ class Cell:
         return self.raw[0] | self.raw[1] << 8
 
     @property
-    def kind(self):             # u8 @2: 1, 2 o 3 (tipo de terreno; ver docs/formats/map.md)
+    def kind(self):             # u8 @2: 1 = tile 40×40, 2 = ancla de un 80×80, 3 = tapada por un 80×80
         return self.raw[2]
 
     @property
@@ -237,16 +237,17 @@ def sprite_rgba(Image, sp, kind, palette):
 
 
 def render_map(Image, gmap, tiles, palette):
-    """Dibuja el terreno: primero los tiles de 40×40 y después los de 80×80 (que cubren 2×2 celdas).
-    Ese orden reproduce las costas y montañas sin cortes; ver docs/formats/map.md §Render."""
+    """Dibuja el terreno como draw_terrain (CLASH:0x419690): fila a fila, cada celda con su tile de
+    40×40 (byte 2 = 1) o de 80×80 anclado en ella (byte 2 = 2); las celdas tapadas (byte 2 = 3) no se
+    dibujan. Los tiles nunca se solapan."""
     by_slot = {s.slot: s for s in tiles.sprites}
     im = Image.new("P", (gmap.width * CELL_PX, gmap.height * CELL_PX), 0)
     im.putpalette(palette)
-    for big in (False, True):
-        for y in range(gmap.height):
-            for x in range(gmap.width):
-                sp = by_slot.get(gmap.cell(x, y).tile)
-                if sp is None or (sp.width > CELL_PX) != big:
-                    continue
-                im.paste(Image.frombytes("P", (sp.width, sp.height), sp.data), (x * CELL_PX, y * CELL_PX))
+    for y in range(gmap.height):
+        for x in range(gmap.width):
+            cell = gmap.cell(x, y)
+            sp = by_slot.get(cell.tile)
+            if sp is None or cell.kind == 3:
+                continue
+            im.paste(Image.frombytes("P", (sp.width, sp.height), sp.data), (x * CELL_PX, y * CELL_PX))
     return im
