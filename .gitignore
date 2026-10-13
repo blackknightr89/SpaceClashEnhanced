@@ -32,3 +32,6 @@ docs/
 
 # --- Python ---
 __pycache__/
+
+# --- Proyecto Ghidra (contiene los EXE originales) y exportaciones del kit de RE ---
+re/proyecto/
