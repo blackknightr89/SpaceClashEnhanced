@@ -396,8 +396,9 @@ set_import_name() {   # set_import_name NOMBRE: GDI32.dll (original) o SCENH.dll
 ini_section_set() {   # ini_section_set ARCHIVO SECCIÓN CLAVE VALOR (crea la sección o la clave si faltan)
     local f=$1 sec=$2 key=$3 val=$4
     grep -q "^\[$sec\]" "$f" || printf '\n[%s]\n' "$sec" >>"$f"
-    if awk -v s="[$sec]" -v k="$key" '$0==s{f=1;next} /^\[/{f=0} f&&index($0,k"=")==1{found=1} END{exit !found}' "$f"; then
-        sed -i "/^\[$sec\]/,/^\[/ s|^$key=.*|$key=$val|" "$f"
+    # El juego reescribe scenh.ini con WritePrivateProfileString (finales CRLF): ignorar el \r al comparar
+    if awk -v s="[$sec]" -v k="$key" '{sub(/\r$/,"")} $0==s{f=1;next} /^\[/{f=0} f&&index($0,k"=")==1{found=1} END{exit !found}' "$f"; then
+        sed -i "/^\[$sec\]/,/^\[/ s|^$key=[^\r]*|$key=$val|" "$f"
     else
         sed -i "/^\[$sec\]/a $key=$val" "$f"
     fi

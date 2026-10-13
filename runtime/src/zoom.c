@@ -51,7 +51,6 @@ static Level g_levels[8];
 static int g_nlevels, g_on, g_wide, g_pending = -1;
 
 /* ---- estado del escalado ---- */
-static IDirectDrawSurface *g_known_primary;
 static int g_surf_w, g_surf_h;                 /* tamaño real de las superficies */
 static uint8_t *g_shadow_back, *g_shadow_primary;
 static size_t g_shadow_size;
@@ -59,12 +58,12 @@ static uint8_t g_blend[256][256];              /* índice más cercano a la mezc
 static int g_blend_ok;
 static int g_last_mx = -1, g_last_my = -1;
 
+/* Tamaño real de la primaria. Se consulta siempre: el juego libera y vuelve a crear las superficies en
+ * cada cambio de modo y la nueva puede quedar en la misma dirección que la anterior (no sirve guardarlo
+ * según el puntero). */
 static void refresh_surface_size(void)
 {
     IDirectDrawSurface *p = G_DDS_PRIMARY;
-    if (p == g_known_primary)
-        return;
-    g_known_primary = p;
     g_surf_w = g_surf_h = 0;
     if (!p)
         return;
@@ -307,12 +306,53 @@ static void present_now(void)
     }
 }
 
+/* Respaldo: llevar las superficies reales al tamaño máximo sin destruir el objeto DirectDraw (como
+ * set_video_mode 0x414A50, pero conservando IDirectDraw y la paleta 0x481E14). Solo hace falta si la
+ * misión arrancó en un modo más chico; puede pasar por negro una vez. */
+static int grow_surfaces(int w, int h)
+{
+    IDirectDraw *dd = G_DDRAW;
+    if (!dd)
+        return 0;
+    if (G_DDS_PRIMARY) {
+        IDirectDrawSurface_Release(G_DDS_PRIMARY);
+        G_DDS_PRIMARY = NULL;
+        G_DDS_BACK = NULL;
+    }
+    if (IDirectDraw_SetDisplayMode(dd, (DWORD)w, (DWORD)h, 8) != DD_OK)
+        return 0;
+    DDSURFACEDESC d;
+    memset(&d, 0, sizeof d);
+    d.dwSize = sizeof d;
+    d.dwFlags = DDSD_CAPS | DDSD_BACKBUFFERCOUNT;
+    d.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE | DDSCAPS_FLIP | DDSCAPS_COMPLEX;
+    d.dwBackBufferCount = 2;
+    IDirectDrawSurface *primary = NULL, *back = NULL;
+    if (IDirectDraw_CreateSurface(dd, &d, &primary, NULL) != DD_OK)
+        return 0;
+    DDSCAPS caps = {DDSCAPS_BACKBUFFER};
+    if (IDirectDrawSurface_GetAttachedSurface(primary, &caps, &back) != DD_OK) {
+        IDirectDrawSurface_Release(primary);
+        return 0;
+    }
+    G_DDS_PRIMARY = primary;
+    G_DDS_BACK = back;
+    ((void(__cdecl *)(void *))0x414BD0)(GAME_PALETTE);   /* paleta en la primaria nueva */
+    log_printf("zoom: superficies ampliadas a %dx%d", w, h);
+    return 1;
+}
+
 /* Cambia el tamaño lógico; las superficies reales quedan como están (las del nivel 0). */
 static int change_level(const Level *lv)
 {
     refresh_surface_size();
-    if (lv->w > g_surf_w || lv->h > g_surf_h)
-        return 0;   /* el juego arrancó la misión en un modo más chico: no se puede ampliar sin cambiar */
+    if (lv->w > g_surf_w || lv->h > g_surf_h) {
+        /* la misión arrancó en un modo más chico que el máximo: ampliar una vez las superficies */
+        log_printf("zoom: la pantalla mide %dx%d, menos que %dx%d", g_surf_w, g_surf_h, lv->w, lv->h);
+        if (!grow_surfaces(g_levels[0].w, g_levels[0].h))
+            return 0;
+        refresh_surface_size();
+    }
     if (g_wide && !resolution_set_mode3(lv->w, lv->h))
         return 0;
     *G_VIDEO_MODE = (int16_t)lv->idx;
