@@ -15,7 +15,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: shellcheck (install-spaceclash.sh)
         run: |
@@ -60,7 +60,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Armar SpaceClashEnhanced.zip
         run: git archive --format=zip --prefix=SpaceClashEnhanced/ -o SpaceClashEnhanced.zip "$GITHUB_REF_NAME"
