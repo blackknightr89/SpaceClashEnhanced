@@ -25,18 +25,24 @@ en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
 
 ## Descargar
 
-Arriba en esta página: botón verde **Code → Download ZIP**. Descomprimí el ZIP donde quieras.
-(Si hay una versión en **Releases**, a la derecha, es preferible bajar esa.)
-
-Dentro vas a encontrar una carpeta llamada **`disk`**: **copiá ahí la imagen de tu CD** (el `.bin` y el
-`.cue`, o la `.iso`). El nombre de los archivos no importa.
+1. **[⬇️ Descargar SpaceClashEnhanced.zip](https://github.com/blackknightr89/SpaceClashEnhanced/releases/latest/download/SpaceClashEnhanced.zip)**
+   (última versión). También está en la página de
+   [Releases](https://github.com/blackknightr89/SpaceClashEnhanced/releases/latest), dentro de
+   *Assets*. Bajá **`SpaceClashEnhanced.zip`**, no los archivos *Source code*.
+2. **Descomprimí** el ZIP donde quieras (por ejemplo, en Documentos). Se crea la carpeta
+   **`SpaceClashEnhanced`**.
+   - Windows: clic derecho sobre el ZIP → **Extraer todo…** → *Extraer*. No ejecutes el instalador desde
+     dentro del ZIP sin extraerlo.
+   - Linux: clic derecho → *Extraer aquí*.
+3. Dentro de `SpaceClashEnhanced` hay una carpeta llamada **`disk`**: **copiá ahí la imagen de tu CD**
+   (el `.bin` y el `.cue`, o la `.iso`). El nombre de los archivos no importa.
 
 ---
 
 ## Instalar en Windows 10 / 11
 
-1. Copiá la imagen del juego en la carpeta `disk`.
-2. Hacé **doble clic en `install-spaceclash.cmd`**.
+1. Comprobá que la imagen del juego esté en `SpaceClashEnhanced\disk`.
+2. En la carpeta `SpaceClashEnhanced`, hacé **doble clic en `install-spaceclash.cmd`**.
    - Si Windows muestra *"Windows protegió su PC"*: **Más información → Ejecutar de todas formas**.
    - Si pregunta por **DirectPlay**, respondé que sí: el juego lo necesita. Windows pedirá permiso de
      administrador una sola vez.
@@ -47,8 +53,9 @@ Dentro vas a encontrar una carpeta llamada **`disk`**: **copiá ahí la imagen d
 
 ## Instalar en Linux (CachyOS / Arch)
 
-1. Copiá la imagen del juego en la carpeta `disk`.
-2. Abrí una terminal **en la carpeta descargada** (en Dolphin: clic derecho → *Abrir terminal aquí*).
+1. Comprobá que la imagen del juego esté en `SpaceClashEnhanced/disk`.
+2. Abrí una terminal **dentro de la carpeta `SpaceClashEnhanced`** (en Dolphin: clic derecho en un
+   espacio vacío → *Abrir terminal aquí*).
 3. Instalá lo necesario (una sola vez; pide tu contraseña):
    ```bash
    sudo pacman -S --needed wine 7zip python unzip curl imagemagick gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
@@ -81,9 +88,14 @@ unzip, curl y los plugins de GStreamer), pero solo se probó en CachyOS.
 
 ## Actualizar
 
-Bajá la versión nueva, y en la carpeta nueva ejecutá de nuevo el instalador (`install-spaceclash.cmd`
-o `bash install-spaceclash.sh install`) con el juego cerrado. **Tus partidas y opciones se conservan**,
-y no hace falta volver a copiar la imagen del CD.
+1. Cerrá el juego.
+2. Bajá la versión nueva desde [Releases](https://github.com/blackknightr89/SpaceClashEnhanced/releases/latest)
+   (mismo enlace de [Descargar](#descargar)) y descomprimila.
+3. Ejecutá de nuevo el instalador desde la carpeta nueva (`install-spaceclash.cmd` o
+   `bash install-spaceclash.sh install`).
+
+**Tus partidas y opciones se conservan**, y no hace falta volver a copiar la imagen del CD: el juego ya
+instalado tiene su propia copia. Después podés borrar la carpeta descargada anterior.
 
 ## Desinstalar
 
@@ -158,6 +170,8 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 
 Installers to play the Spanish edition of **Space Clash: The Last Frontier** (1999) on modern **Linux**
 (via Wine) and **Windows 10/11**. They include scaled 4:3 fullscreen and binary patches for the original
-game's crash bugs. **The game is not included**: put your own CD image (`.bin`/`.cue` or `.iso`) in `disk/`.
+game's crash bugs. **The game is not included**: download **SpaceClashEnhanced.zip** from
+[Releases](https://github.com/blackknightr89/SpaceClashEnhanced/releases/latest), extract it, and put
+your own CD image (`.bin`/`.cue` or `.iso`) in `SpaceClashEnhanced/disk/`.
 Then run `install-spaceclash.cmd` (Windows) or `bash install-spaceclash.sh install` (Linux).
 Documentation and installer messages are in Spanish.

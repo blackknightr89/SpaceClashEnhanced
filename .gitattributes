@@ -10,3 +10,6 @@
 *.png  binary
 *.jpg  binary
 *.ico  binary
+# Archivos que no van en los ZIP de descarga (git archive / Releases)
+.gitattributes export-ignore
+.gitignore     export-ignore
