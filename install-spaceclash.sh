@@ -25,12 +25,16 @@ SC_DISK_DIR="${SC_DISK_DIR:-$SCRIPT_DIR/disk}"          # dónde están .bin/.cu
 SC_IMAGE="${SC_IMAGE:-${SC_BIN:-}}"                     # .cue/.bin/.iso (vacío = buscar en disk/)
 SC_WINE="${SC_WINE:-wine}"                              # binario de wine a usar
 SC_DISPLAY="${SC_DISPLAY:-scaled}"                      # scaled (pantalla completa 4:3 escalada) | window (ventana tamaño original)
-SC_RENDERER="${SC_RENDERER:-gdi}"                       # renderer de cnc-ddraw en modo scaled: gdi | opengl | auto
+SC_RENDERER="${SC_RENDERER:-opengl}"                    # renderer de cnc-ddraw en modo scaled: opengl | gdi | auto
+SC_SCALING="${SC_SCALING:-fit}"                         # scaled: fit (llenar el alto, 4:3) | integer (solo factores enteros, más borde)
+SC_FILTER="${SC_FILTER:-auto}"                          # scaled+opengl: auto | nearest | sharp | smooth | xbr | crt
+SC_GAME_RES="${SC_GAME_RES:-auto}"                      # resolución del juego (CLASH.CFG): auto (1024 al instalar de cero, si no keep) | keep | 640 | 800 | 1024
 SC_PATCH="${SC_PATCH:-1}"                               # 1 = aplicar parches de compatibilidad (ver sección 5b)
 SC_VDESKTOP="${SC_VDESKTOP:-1}"                         # 1 = ejecutar en escritorio virtual de Wine
 SC_VDESKTOP_RES="${SC_VDESKTOP_RES:-auto}"              # tamaño del escritorio virtual (auto = monitor en scaled, 1024x768 en window)
 SC_GAMESCOPE="${SC_GAMESCOPE:-0}"                       # 1 = envolver con gamescope (escalado a pantalla completa)
 SC_FULL="${SC_FULL:-0}"                                 # 1 = copiar música y vídeos al disco
+SC_VIDEOS="${SC_VIDEOS:-fit}"                           # fit (vídeos 4:3 con barras a la resolución del monitor) | original
 SC_DESKTOP="${SC_DESKTOP:-1}"                           # 1 = crear acceso directo .desktop
 SC_CD_LETTER="${SC_CD_LETTER:-r}"                       # letra del CD virtual (R:; S:/T: las reserva Proton)
 SC_CNC_URL="${SC_CNC_URL:-https://github.com/FunkyFr3sh/cnc-ddraw/releases/download/v7.1.0.0/cnc-ddraw.zip}"
@@ -72,7 +76,7 @@ wine_q() { "$SC_WINE" "$@" >/dev/null 2>&1; }   # wine silencioso
 # --------------------------------------------------------------------------- #
 # Paquetes de Arch/CachyOS necesarios (Wine >= 9 de Arch es WoW64 puro: NO hace
 # falta ningún paquete lib32-* para ejecutar este juego de 32 bits).
-PACMAN_PKGS=(wine 7zip python unzip curl imagemagick
+PACMAN_PKGS=(wine 7zip python unzip curl imagemagick ffmpeg
              gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav)
 
 check_deps() {
@@ -97,6 +101,9 @@ check_deps() {
             || warn "Falta decodificador MPEG-1 (gst-libav o gst-plugins-ugly). Los vídeos podrían no reproducirse."
     else
         warn "gst-inspect-1.0 no encontrado: no se puede verificar GStreamer (vídeos)."
+    fi
+    if [[ "$SC_DISPLAY" == scaled && "$SC_VIDEOS" == fit ]] && ! have ffmpeg; then
+        warn "Falta ffmpeg (sudo pacman -S ffmpeg): sin él los vídeos se verán estirados a lo ancho."
     fi
     ok "Dependencias: $("$SC_WINE" --version 2>/dev/null)"
 }
@@ -246,7 +253,9 @@ install_files() {
     done
     # Opciones del juego: solo la primera vez (una reinstalación conserva las del usuario).
     # Las partidas (*.sav) nunca se tocan.
-    [[ -f "$GAME_DIR/CLASH.CFG" ]] || install -m 0644 "$CD_DIR/CLASH.CFG" "$GAME_DIR/CLASH.CFG"
+    if [[ ! -f "$GAME_DIR/CLASH.CFG" ]]; then
+        install -m 0644 "$CD_DIR/CLASH.CFG" "$GAME_DIR/CLASH.CFG"; NEW_CFG=1
+    fi
     install -m 0644 "$CD_DIR/MANUAL/MANUAL.PDF" "$GAME_DIR/MANUAL.PDF"
     for d in EFECTOS IMG LOCU MAPAS SPC SPR; do
         rm -rf "${GAME_DIR:?}/$d"; cp -r "$CD_DIR/$d" "$GAME_DIR/$d"
@@ -344,7 +353,7 @@ apply_patches() {
 #      ({6BC1CFFA…}) para que DirectShow elija el "Video Renderer" GDI clásico
 #      ({70E102B0…}). Limitación: el juego pone el vídeo en una ventana hija
 #      de 4000x4000 + "pantalla completa" (no implementado en Wine), así que los
-#      vídeos se ven COMPLETOS pero ESTIRADOS a 16:9; el juego queda en 4:3.
+#      vídeos se estiran a toda la pantalla. Lo corrige setup_videos (6b).
 #  window — el modo original verificado primero: DirectDraw de Wine (wined3d) y
 #    VMR7; el escritorio virtual adopta el tamaño del modo del juego (640x480…),
 #    sin escalar. Vídeos perfectos, ventana chica.
@@ -371,7 +380,24 @@ setup_ddraw() {
     fi
     [[ "$SC_DISPLAY" == scaled ]] || die "SC_DISPLAY inválido: $SC_DISPLAY (scaled|window)"
     log "Modo de pantalla: scaled (cnc-ddraw, pantalla completa 4:3)…"
-    local cache="$SC_ROOT/media/cnc-ddraw.zip" tmp
+    local cache="$SC_ROOT/media/cnc-ddraw.zip" tmp boxing shader filter=$SC_FILTER
+    case "$SC_SCALING" in
+        fit)     boxing=false ;;
+        integer) boxing=true ;;
+        *) die "SC_SCALING inválido: $SC_SCALING (fit|integer)" ;;
+    esac
+    # auto: con escalado libre el factor no es entero (1080p: x1,8-x2,25) y "sharp" evita píxeles
+    # de ancho desparejo; con escalado entero, píxeles exactos.
+    [[ "$filter" == auto ]] && { [[ "$SC_SCALING" == integer ]] && filter=nearest || filter=sharp; }
+    case "$filter" in   # valores internos de cnc-ddraw o rutas a Shaders\ (copiados abajo)
+        nearest) shader="Nearest neighbor" ;;
+        sharp)   shader='Shaders\interpolation\sharp-bilinear-simple-bilinear.glsl' ;;
+        smooth)  shader="Bicubic" ;;
+        xbr)     shader="xBR-lv2" ;;
+        crt)     shader='Shaders\crt\crt-lottes-fast-no-warp-bilinear.glsl' ;;
+        *) die "SC_FILTER inválido: $SC_FILTER (auto|nearest|sharp|smooth|xbr|crt)" ;;
+    esac
+    [[ "$SC_RENDERER" == gdi && "$filter" != nearest ]] && warn "--filter $filter no tiene efecto con renderer=gdi (escalado simple por CPU)"
     if [[ ! -f "$cache" ]]; then
         mkdir -p "$(dirname "$cache")"
         curl -fsSL --retry 3 -o "$cache.part" "$SC_CNC_URL" || die "No se pudo descargar cnc-ddraw ($SC_CNC_URL). Usá --display window o descargalo a mano en $cache"
@@ -381,14 +407,20 @@ setup_ddraw() {
     install -m 0644 "$tmp/ddraw.dll" "$GAME_DIR/ddraw.dll"
     install -m 0644 "$tmp/ddraw.ini" "$GAME_DIR/ddraw.ini"
     sed -i 's/\r$//' "$GAME_DIR/ddraw.ini"      # viene con CRLF; ini_set trabaja con LF
+    # Shaders de escalado (GLSL de libretro): los del zip + el paquete ampliado que trae dentro
+    rm -rf "$GAME_DIR/Shaders"; cp -r "$tmp/Shaders" "$GAME_DIR/Shaders"
+    if [[ -f "$GAME_DIR/Shaders/shader-package.zip" ]]; then
+        unzip -q -o "$GAME_DIR/Shaders/shader-package.zip" -d "$GAME_DIR" && rm -f "$GAME_DIR/Shaders/shader-package.zip"
+    fi
     rm -rf "$tmp"
     ini_set fullscreen   true      # ventana sin bordes del tamaño del escritorio virtual
     ini_set windowed     false
     ini_set maintas      true      # mantener 4:3 (barras negras a los lados)
-    ini_set boxing       false     # true = solo escalado entero (más nítido, más borde)
+    ini_set boxing       "$boxing" # true = solo escalado entero (más nítido, más borde)
     ini_set width        0
     ini_set height       0
     ini_set renderer     "$SC_RENDERER"
+    ini_set shader       "$shader" # solo con renderer=opengl
     ini_set adjmouse     true      # traducir coordenadas del ratón al modo del juego
     ini_set vsync        false
     ini_set devmode      false
@@ -398,18 +430,166 @@ setup_ddraw() {
     done
     set_vmr_merit low
     "$SC_WINE"server -w 2>/dev/null || wineserver -w
-    ok "cnc-ddraw configurado (renderer=$SC_RENDERER; ajustes en $GAME_DIR/ddraw.ini, sección [ddraw])"
+    ok "cnc-ddraw configurado (renderer=$SC_RENDERER, escalado=$SC_SCALING, filtro=$filter; ajustes en $GAME_DIR/ddraw.ini, sección [ddraw])"
 }
 
 ini_set() {   # ini_set clave valor → fija "clave=valor" SOLO dentro de la sección [ddraw]
     local k=$1 v=$2 ini="$GAME_DIR/ddraw.ini" tmp
     tmp=$(mktemp)
-    awk -v k="$k" -v v="$v" '
+    # Valores por ENVIRON y no con awk -v, que interpreta las barras invertidas (rutas de shaders)
+    K="$k" V="$v" awk '
+        BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"] }
         /^\[/ { if (insec && !done) { print k "=" v; done=1 } insec = ($0 == "[ddraw]") }
         insec && $0 ~ "^[;[:space:]]*" k "[[:space:]]*=" { if (!done) { print k "=" v; done=1 }; next }
         { print }
         END { if (insec && !done) print k "=" v }
     ' "$ini" > "$tmp" && mv "$tmp" "$ini" && chmod 0644 "$ini"
+}
+
+# Resolución del juego (la misma opción que el menú Opciones → Resolución de Pantalla).
+# CLASH.CFG (18 bytes): el byte 0x10 es el modo: 1 = 640x480, 2 = 800x600, 3 = 1024x768.
+# 1024x768 muestra más área del mapa; con --scaling integer en 4K queda a x2 (2048x1536).
+set_game_res() {
+    local cfg="$GAME_DIR/CLASH.CFG" idx
+    local res=$SC_GAME_RES
+    # auto: 1024x768 (más mapa visible) solo si CLASH.CFG es nuevo; al reinstalar se respeta lo que el
+    # jugador eligió en Opciones.
+    [[ "$res" == auto ]] && { [[ "${NEW_CFG:-0}" == 1 ]] && res=1024 || res=keep; }
+    case "$res" in
+        keep) return ;;
+        640) idx=1 ;; 800) idx=2 ;; 1024) idx=3 ;;
+        *) die "SC_GAME_RES inválido: $SC_GAME_RES (auto|keep|640|800|1024)" ;;
+    esac
+    [[ $(stat -c %s "$cfg") == 18 ]] || { warn "CLASH.CFG con tamaño inesperado; no se cambia la resolución"; return; }
+    printf "\\x0$idx" | dd of="$cfg" bs=1 seek=16 conv=notrunc status=none
+    ok "Resolución del juego: $(game_res_name) (CLASH.CFG)"
+}
+
+game_res_name() {   # nombre de la resolución guardada en CLASH.CFG
+    local b; b=$(od -An -tu1 -j16 -N1 "$GAME_DIR/CLASH.CFG" 2>/dev/null | tr -d ' ')
+    case "$b" in 0) echo 640x400 ;; 1) echo 640x480 ;; 2) echo 800x600 ;; 3) echo 1024x768 ;; *) echo "? ($b)" ;; esac
+}
+
+# --------------------------------------------------------------------------- #
+#  6b. Vídeos a pantalla completa sin deformar (modo scaled)
+# --------------------------------------------------------------------------- #
+#  El renderizador de vídeo estira cada .MPG (320x240, 4:3) a toda la pantalla,
+#  sin respetar el aspect ratio (en 16:9 se ven un 33 % más anchos). Se
+#  reencodean a la resolución EXACTA de la pantalla, con la imagen 4:3 centrada
+#  y barras negras: el estirado queda 1:1. Siguen siendo MPEG-1 System con el
+#  mismo nombre (el formato que el juego ya reproduce) y el audio MP2 se copia
+#  sin tocar. Los originales quedan en cd/VIDEOS/ORIG/. Lo hace videos-fit.sh,
+#  que también usa el lanzador para regenerarlos si cambia la resolución.
+#  Detalle y alternativas: docs/VIDEOS.md.
+create_video_helper() {
+    cat > "$SC_ROOT/videos-fit.sh" <<'EOF'
+#!/usr/bin/env bash
+# videos-fit.sh — adapta los vídeos de Space Clash a la pantalla (generado por install-spaceclash.sh)
+#   videos-fit.sh check WxH    ¿ya están generados para WxH? (código 0 = sí)
+#   videos-fit.sh ensure WxH   los genera para WxH si hace falta (~1 min)
+#   videos-fit.sh restore      vuelve a los vídeos originales
+#   videos-fit.sh status       muestra el estado
+set -uo pipefail
+V="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cd/VIDEOS"
+O="$V/ORIG"; STAMP="$V/.fit"
+FIT_VERSION=1   # subir si cambian los parámetros de codificación (fuerza regenerar)
+declare -A SHA=(
+    [LOGO.MPG]=73b260e5f9c53d198d3872719b86c99d58059fa01224cce937bcd660af97306d
+    [DINAMIC.MPG]=18d721c17d4f0f3cfab163ccf2255500427ce0ee9441ad97be632cdbe9d6e794
+    [INTRO.MPG]=21ccc54cf26092b1fc9af45ea764f3d0e356fb993715ebc25a45b5225a577955
+    [FINAL00.MPG]=9d961881d5a076c6d1899e626b9ca519630aad6c7c2aea64f44f2b58493e5774
+    [FINAL01.MPG]=35286ae006a543096b6ee1e2bb2b17990680152703a3d790861909396535a278
+    [FINAL02.MPG]=76b406415b48813c0a79e83596e83bcf1f2f4e7f05a73954503a1d1a31e1ac37
+    [FINAL03.MPG]=13a2dd30aa8547d0560cc24fdc6ed87b3468310779c86146835cc2dabb8df983
+)
+fail() { echo "videos-fit: $*" >&2; exit 1; }
+
+backup() {   # copia los originales a ORIG/ (una sola vez)
+    local f
+    mkdir -p "$O" || fail "no se pudo crear $O"
+    for f in "${!SHA[@]}"; do
+        [[ -f "$O/$f" ]] && continue
+        [[ -f "$STAMP" ]] && fail "falta el original $O/$f y $V/$f ya está adaptado (reinstalá con --force)"
+        [[ -f "$V/$f" ]] || fail "falta $V/$f"
+        [[ $(sha256sum "$V/$f" | cut -c1-64) == "${SHA[$f]}" ]] || echo "videos-fit: aviso: $f no coincide con el del CD conocido; se usa igual" >&2
+        cp -p --reflink=auto "$V/$f" "$O/$f.part" && mv "$O/$f.part" "$O/$f" || fail "no se pudo copiar $f a $O"
+    done
+}
+
+restore() {
+    local f
+    rm -f "$STAMP" "$V"/.*.part
+    [[ -d "$O" ]] || return 0
+    for f in "${!SHA[@]}"; do
+        [[ -f "$O/$f" ]] && { cp -p --reflink=auto "$O/$f" "$V/$f" || fail "no se pudo restaurar $f"; }
+    done
+    rm -rf "$O"
+}
+
+check() { [[ "$(cat "$STAMP" 2>/dev/null)" == "$1 v$FIT_VERSION" ]]; }
+
+ensure() {
+    local res=$1 w h vf f p ok=1 pids=()
+    [[ $res =~ ^([0-9]+)x([0-9]+)$ ]] || fail "resolución inválida: $res"
+    w=${BASH_REMATCH[1]}; h=${BASH_REMATCH[2]}
+    check "$res" && return 0
+    command -v ffmpeg >/dev/null || fail "falta ffmpeg; se usan los vídeos actuales"
+    # Más de 1080 líneas no aporta nada con una fuente de 320x240: en pantallas mayores se genera a
+    # 1080 de alto con la MISMA proporción y el renderizador lo estira sin deformar.
+    if ((h > 1080)); then w=$(( (w * 1080 / h + 1) / 2 * 2 )); h=1080; fi
+    backup
+    echo "videos-fit: generando los vídeos para $res (${w}x$h)…"
+    # setsar=1: los originales declaran un pel aspect ratio erróneo (178:163); son 4:3 con píxeles cuadrados
+    vf="setsar=1,scale=$w:$h:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos"
+    vf+=",pad=$w:$h:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
+    rm -f "$STAMP"
+    for f in "${!SHA[@]}"; do
+        ffmpeg -nostdin -v error -y -i "$O/$f" -vf "$vf" \
+            -c:v mpeg1video -q:v 3 -maxrate 15M -bufsize 4M -g 12 -bf 2 \
+            -c:a copy -f mpeg "$V/.$f.part" &
+        pids+=($!)
+    done
+    for p in "${pids[@]}"; do wait "$p" || ok=0; done
+    for f in "${!SHA[@]}"; do [[ -s "$V/.$f.part" ]] || ok=0; done
+    if ((!ok)); then restore; fail "ffmpeg falló; se restauraron los vídeos originales"; fi
+    for f in "${!SHA[@]}"; do mv "$V/.$f.part" "$V/$f"; done
+    echo "$res v$FIT_VERSION" > "$STAMP"
+    echo "videos-fit: listo ($res)"
+}
+
+case "${1:-status}" in
+    check)   check "${2:?falta WxH}" ;;
+    ensure)  ensure "${2:?falta WxH}" ;;
+    restore) restore ;;
+    status)  if [[ -f "$STAMP" ]]; then echo "adaptados: $(cat "$STAMP")"; else echo "originales"; fi ;;
+    *)       fail "uso: $0 check|ensure WxH | restore | status" ;;
+esac
+EOF
+    chmod +x "$SC_ROOT/videos-fit.sh"
+}
+
+setup_videos() {
+    local helper="$SC_ROOT/videos-fit.sh" res
+    [[ "$SC_VIDEOS" == fit || "$SC_VIDEOS" == original ]] || die "SC_VIDEOS inválido: $SC_VIDEOS (fit|original)"
+    create_video_helper
+    if [[ "$SC_DISPLAY" != scaled || "$SC_VIDEOS" != fit ]]; then
+        "$helper" restore && ok "Vídeos originales"
+        return
+    fi
+    if ! have ffmpeg; then
+        warn "Sin ffmpeg los vídeos se verán estirados. Instalalo (sudo pacman -S ffmpeg): el lanzador los adaptará al arrancar."
+        return
+    fi
+    res=$SC_VDESKTOP_RES
+    [[ "$res" == auto ]] && res=$(xrandr --current 2>/dev/null | awk '/\*/{print $1; exit}')
+    if [[ ! "$res" =~ ^[0-9]+x[0-9]+$ ]]; then
+        log "No se pudo detectar la resolución: los vídeos se adaptarán al arrancar el juego."
+        return
+    fi
+    [[ "${FORCE:-0}" == 1 ]] && rm -f "$CD_DIR/VIDEOS/.fit"
+    log "Adaptando los vídeos a $res (4:3 centrado con barras negras; ~1 min)…"
+    if "$helper" ensure "$res" >/dev/null; then ok "Vídeos adaptados a $res (originales en $CD_DIR/VIDEOS/ORIG)"
+    else warn "No se pudieron adaptar los vídeos: se usan los originales (estirados)."; fi
 }
 
 # --------------------------------------------------------------------------- #
@@ -439,6 +619,13 @@ if [[ "\$SC_VDESKTOP_RES" == auto ]]; then
     fi
 fi
 SC_GAMESCOPE="\${SC_GAMESCOPE:-$SC_GAMESCOPE}"
+SC_VIDEOS="\${SC_VIDEOS:-$SC_VIDEOS}"
+# Vídeos 4:3 con barras para esta resolución: se regeneran si cambió el monitor (~1 min)
+if [[ "\$SC_DISPLAY" == scaled && "\$SC_VIDEOS" == fit && -x "$SC_ROOT/videos-fit.sh" ]] \
+   && ! "$SC_ROOT/videos-fit.sh" check "\$SC_VDESKTOP_RES"; then
+    command -v notify-send >/dev/null && notify-send -a 'Space Clash' 'Space Clash' "Adaptando los vídeos a \$SC_VDESKTOP_RES…"
+    "$SC_ROOT/videos-fit.sh" ensure "\$SC_VDESKTOP_RES" >>"$LOG_DIR/wine.log" 2>&1
+fi
 cd "$GAME_DIR" || exit 1
 # SC.EXE detecta el CD virtual, escribe CDSC.INS y lanza CLASH.EXE.
 # Ruta completa obligatoria: dentro de explorer, "SC.EXE" a secas resuelve al
@@ -488,6 +675,9 @@ cmd_install() {
     if pgrep -x 'SC.EXE|CLASH.EXE|SPACE.EXE|Space.exe' >/dev/null 2>&1; then
         die "El juego está abierto. Cerralo antes de instalar/actualizar (si quedó colgado: WINEPREFIX=\"$WINEPREFIX\" wineserver -k)."
     fi
+    [[ "$SC_SCALING" =~ ^(fit|integer)$ ]] || die "SC_SCALING inválido: $SC_SCALING (fit|integer)"
+    [[ "$SC_FILTER" =~ ^(auto|nearest|sharp|smooth|xbr|crt)$ ]] || die "SC_FILTER inválido: $SC_FILTER (auto|nearest|sharp|smooth|xbr|crt)"
+    [[ "$SC_GAME_RES" =~ ^(auto|keep|640|800|1024)$ ]] || die "SC_GAME_RES inválido: $SC_GAME_RES (auto|keep|640|800|1024)"
     log "Instalando Space Clash en $SC_ROOT"
     check_deps
     if [[ -f "$CD_DIR/UNCLASH.EXE" && "${FORCE:-0}" != 1 ]]; then
@@ -501,6 +691,8 @@ cmd_install() {
     install_files
     apply_patches
     setup_ddraw
+    set_game_res
+    setup_videos
     create_launcher
     echo
     ok "Instalación completa."
@@ -544,11 +736,18 @@ cmd_doctor() {
         echo "    Modo de pantalla: window (cnc-ddraw no instalado: se usa wined3d)"
     fi
     if [[ -f "$GAME_DIR/ddraw.dll" ]]; then
-        echo "    Modo de pantalla: scaled ($(awk '/^\[ddraw\]/{f=1;next} /^\[/{f=0} f&&/^renderer=/{print; exit}' "$GAME_DIR/ddraw.ini"))"
+        echo "    Modo de pantalla: scaled ($(awk '/^\[ddraw\]/{f=1;next} /^\[/{f=0} f&&/^(renderer|boxing|shader)=/{printf "%s%s", s, $0; s="; "}' "$GAME_DIR/ddraw.ini"))"
         chk "Vídeo: renderer GDI preferido (mérito VMR bajado)" \
             "grep -A3 -i 'Instance\\\\\\\\{6BC1CFFA' \"$WINEPREFIX/system.reg\" | grep -qi 'filterdata\"=hex:02,00,00,00,00,00,20,00'"
+        if [[ -f "$CD_DIR/VIDEOS/.fit" ]]; then
+            ok "Vídeos adaptados a la pantalla ($(cat "$CD_DIR/VIDEOS/.fit"); originales en cd/VIDEOS/ORIG)"
+        else
+            echo "    Vídeos: originales (se ven estirados a lo ancho; ver --videos)"
+        fi
+        have ffmpeg || echo "    ffmpeg no instalado (necesario para adaptar los vídeos)"
     fi
     if [[ -f "$GAME_DIR/CDSC.INS" ]]; then echo "    CDSC.INS = $(cat "$GAME_DIR/CDSC.INS")"; fi
+    [[ -f "$GAME_DIR/CLASH.CFG" ]] && echo "    Resolución del juego: $(game_res_name) (Opciones del juego o --game-res)"
     if have gst-inspect-1.0; then
         chk "GStreamer mpegpsdemux"                "gst-inspect-1.0 mpegpsdemux >/dev/null 2>&1"
         chk "GStreamer decodificador MPEG-1"       "gst-inspect-1.0 avdec_mpeg2video >/dev/null 2>&1 || gst-inspect-1.0 mpeg2dec >/dev/null 2>&1"
@@ -583,13 +782,26 @@ Opciones (o variables de entorno equivalentes):
   --display MODO      scaled = pantalla completa 4:3 escalada (cnc-ddraw)
                       window = ventana del tamaño original (DirectDraw de Wine)
                                                           (SC_DISPLAY, def: scaled)
-  --renderer R        Renderer de cnc-ddraw: gdi|opengl|auto (SC_RENDERER, def: gdi)
+  --renderer R        Renderer de cnc-ddraw: opengl|gdi|auto (SC_RENDERER, def: opengl)
+                      Si se ve negro, usar gdi (sin filtros)
+  --scaling MODO      fit = llenar el alto de la pantalla en 4:3
+                      integer = solo factores enteros (más nítido, más borde)
+                                                          (SC_SCALING, def: fit)
+  --filter F          Filtro de escalado (renderer opengl):
+                      auto|nearest|sharp|smooth|xbr|crt   (SC_FILTER, def: auto =
+                      sharp con fit, nearest con integer)
+  --game-res R        Resolución del juego: auto|keep|640|800|1024 (SC_GAME_RES, def: auto
+                      = 1024 en una instalación nueva; al reinstalar se conserva la elegida)
+                      1024 = más área del mapa visible
   --no-patch          No aplicar el parche de compatibilidad (SC_PATCH=0)
   --no-vdesktop       Sin escritorio virtual de Wine      (SC_VDESKTOP=0)
   --vdesktop-res WxH  Tamaño del escritorio virtual       (SC_VDESKTOP_RES, def: auto)
   --gamescope         Envolver con gamescope (escalado)   (SC_GAMESCOPE=1)
   --cd-letter X       Letra del CD virtual                (SC_CD_LETTER, def: r)
   --full              Copia también MUSICAS y VIDEOS al disco (SC_FULL=1)
+  --videos MODO       fit = vídeos 4:3 con barras a pantalla completa (requiere ffmpeg)
+                      original = vídeos sin tocar (estirados en modo scaled)
+                                                          (SC_VIDEOS, def: fit)
   --no-desktop        No crear acceso directo .desktop    (SC_DESKTOP=0)
   --install-deps      Instala dependencias con pacman si faltan
   --skip-hash         No verificar SHA-256 de la imagen
@@ -608,6 +820,9 @@ while (($#)); do
         --wine)         SC_WINE=$2; shift ;;
         --display)      SC_DISPLAY=$2; shift ;;
         --renderer)     SC_RENDERER=$2; shift ;;
+        --scaling)      SC_SCALING=$2; shift ;;
+        --filter)       SC_FILTER=$2; shift ;;
+        --game-res)     SC_GAME_RES=$2; shift ;;
         --ddraw)        [[ $2 == cnc ]] && SC_DISPLAY=scaled || SC_DISPLAY=window; shift ;;   # compatibilidad
         --cd-letter)    SC_CD_LETTER=$2; shift ;;
         --no-patch)     SC_PATCH=0 ;;
@@ -615,6 +830,7 @@ while (($#)); do
         --vdesktop-res) SC_VDESKTOP_RES=$2; shift ;;
         --gamescope)    SC_GAMESCOPE=1 ;;
         --full)         SC_FULL=1 ;;
+        --videos)       SC_VIDEOS=$2; shift ;;
         --no-desktop)   SC_DESKTOP=0 ;;
         --install-deps) INSTALL_DEPS=1 ;;
         --skip-hash)    SKIP_HASH=1 ;;

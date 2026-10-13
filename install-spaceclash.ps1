@@ -9,6 +9,8 @@
     - Aplica los parches de compatibilidad P1-P4 (bugs del juego original; detalle en la sección «Parches» de este script).
     - Modo de pantalla "Scaled" (por defecto): cnc-ddraw, pantalla completa 4:3 centrada.
       Modo "Native": DirectDraw de Windows con capas de compatibilidad.
+    - Opcional (-Videos Fit): vídeos 4:3 con barras negras a la resolución del monitor, para que no se
+      vean estirados en modo Scaled (requiere ffmpeg; se descarga si no está). Ver docs/VIDEOS.md.
     - Crea un lanzador (accesos directos en Escritorio y menú Inicio) que asigna una letra de
       unidad a la carpeta del CD con SUBST y ejecuta el juego.
     Documentación para usuarios: README.md.
@@ -17,6 +19,7 @@
     # Doble clic en install-spaceclash.cmd, o desde PowerShell:
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -Display Native
+    powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -GameRes 1024 -Scaling Integer   # 4K
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -Command doctor
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -Command uninstall
 #>
@@ -34,8 +37,23 @@ param(
     # Renderer de cnc-ddraw (solo Scaled). auto = Direct3D 9 en Windows
     [ValidateSet('auto', 'direct3d9', 'opengl', 'gdi')]
     [string]$Renderer = 'auto',
+    # Fit = llenar el alto de la pantalla en 4:3 | Integer = solo factores enteros (más nítido, más borde)
+    [ValidateSet('Fit', 'Integer')]
+    [string]$Scaling = 'Fit',
+    # Filtro de escalado. Los shaders (Sharp, Xbr, Crt…) requieren -Renderer opengl; con direct3d9 solo
+    # hay vecino más cercano (Nearest) o bilineal (el resto). Auto = Sharp con Fit, Nearest con Integer
+    [ValidateSet('Auto', 'Nearest', 'Sharp', 'Smooth', 'Xbr', 'Crt')]
+    [string]$Filter = 'Auto',
+    # Resolución del juego (CLASH.CFG, igual que Opciones → Resolución de Pantalla). 1024 = más mapa visible.
+    # Auto = 1024 en una instalación nueva; al reinstalar se conserva la que eligió el jugador
+    [ValidateSet('Auto', 'Keep', '640', '800', '1024')]
+    [string]$GameRes = 'Auto',
     # No tocar el renderizador de vídeo de DirectShow (ver Set-VmrMerit más abajo)
     [switch]$NoVideoFix,
+    # Fit = vídeos 4:3 con barras a la resolución del monitor (solo Scaled; sin verificar aún en Windows)
+    # Original = vídeos sin tocar (en Scaled podrían verse estirados)
+    [ValidateSet('Fit', 'Original')]
+    [string]$Videos = 'Original',
     [switch]$NoShortcut,
     [switch]$SkipHash,
     [switch]$SkipDirectPlay,
@@ -55,7 +73,11 @@ $BinSha256   = 'a0d007d205f83c3307294b5d8211eca588361584dba986010b6516efe0bc2e10
 $IsoSha256   = '88f14eb7c20cef85b5ba563b1127b821419159ac057b0999cce22f0944889c0b'
 $CncUrl      = 'https://github.com/FunkyFr3sh/cnc-ddraw/releases/download/v7.1.0.0/cnc-ddraw.zip'
 $GameExes    = @('CLASH.EXE', 'SPACE.EXE')
+# ffmpeg para -Videos Fit (solo si no hay uno en el PATH). Build "essentials" de gyan.dev, versión fija.
+$FfmpegUrl    = 'https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip'
+$FfmpegSha256 = '60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba'
 $IsWin       = [System.Environment]::OSVersion.Platform -eq 'Win32NT'
+$NewCfg      = $false     # Install-GameFiles: CLASH.CFG recién copiado (instalación nueva)
 
 # Parches (mismos que install-spaceclash.sh). Formato por archivo:
 #   File, Sha256 original, Sha256 final, lista de @(offset, bytes originales, bytes nuevos)
@@ -92,6 +114,7 @@ $CompatFlags = '~ WINXPSP3 256COLOR DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE'
 $CdDir    = Join-Path $InstallDir 'CD'
 $GameDir  = Join-Path $InstallDir 'SCLASH'
 $Launcher = Join-Path $InstallDir 'SpaceClash.ps1'
+$VideoFit = Join-Path $InstallDir 'VideosFit.ps1'
 $LogDir   = Join-Path $InstallDir 'logs'
 
 # --------------------------------------------------------------------------- #
@@ -277,7 +300,9 @@ function Install-GameFiles {
         Copy-Item -Force (Join-Path $CdDir $f) (Join-Path $GameDir $f)
     }
     # Opciones del juego: solo la primera vez. Las partidas (*.sav) nunca se tocan.
-    if (-not (Test-Path (Join-Path $GameDir 'CLASH.CFG'))) { Copy-Item (Join-Path $CdDir 'CLASH.CFG') $GameDir }
+    if (-not (Test-Path (Join-Path $GameDir 'CLASH.CFG'))) {
+        Copy-Item (Join-Path $CdDir 'CLASH.CFG') $GameDir; $script:NewCfg = $true
+    }
     Copy-Item -Force (Join-Path $CdDir 'MANUAL\MANUAL.PDF') (Join-Path $GameDir 'MANUAL.PDF')
     foreach ($d in 'EFECTOS', 'IMG', 'LOCU', 'MAPAS', 'SPC', 'SPR') {
         $dst = Join-Path $GameDir $d
@@ -395,14 +420,228 @@ function Install-Display {
     [System.IO.Compression.ZipFile]::ExtractToDirectory($cache, $tmp)
     Copy-Item -Force (Join-Path $tmp 'ddraw.dll') $dll
     Copy-Item -Force (Join-Path $tmp 'ddraw.ini') $ini
+    # Shaders de escalado (GLSL de libretro, para renderer=opengl): los del zip + el paquete ampliado
+    $shaders = Join-Path $GameDir 'Shaders'
+    if (Test-Path $shaders) { Remove-Item -Recurse -Force $shaders }
+    Copy-Item -Recurse (Join-Path $tmp 'Shaders') $shaders
+    $pkg = Join-Path $shaders 'shader-package.zip'
+    if (Test-Path $pkg) {
+        Add-Type -AssemblyName System.IO.Compression
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($pkg)
+        try {
+            foreach ($e in $zip.Entries) {
+                if ($e.Name -eq '') { continue }
+                $dst = Join-Path $GameDir ($e.FullName -replace '/', '\')
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dst, $true)
+            }
+        } finally { $zip.Dispose() }
+        Remove-Item -Force $pkg
+    }
     Remove-Item -Recurse -Force $tmp
-    $settings = [ordered]@{ fullscreen = 'true'; windowed = 'false'; maintas = 'true'; boxing = 'false'
-                           width = '0'; height = '0'; renderer = $Renderer; adjmouse = 'true'
+    $f = $Filter
+    if ($f -eq 'Auto') { $f = if ($Scaling -eq 'Integer') { 'Nearest' } else { 'Sharp' } }
+    $shader = @{ Nearest = 'Nearest neighbor'; Sharp = 'Shaders\interpolation\sharp-bilinear-simple-bilinear.glsl'
+                 Smooth = 'Bicubic'; Xbr = 'xBR-lv2'; Crt = 'Shaders\crt\crt-lottes-fast-no-warp-bilinear.glsl' }[$f]
+    $d3d9Filter = if ($f -eq 'Nearest') { '0' } else { '1' }    # 8 bits: direct3d9 solo admite 0 o 1
+    $settings = [ordered]@{ fullscreen = 'true'; windowed = 'false'; maintas = 'true'
+                           boxing = $(if ($Scaling -eq 'Integer') { 'true' } else { 'false' })
+                           width = '0'; height = '0'; renderer = $Renderer; shader = $shader
+                           d3d9_filter = $d3d9Filter; adjmouse = 'true'
                            vsync = 'false'; devmode = 'false'; savesettings = '0' }
     foreach ($k in $settings.Keys) { Set-IniKey $ini $k $settings[$k] }
     Set-CompatLayers $false          # las capas de compatibilidad interfieren con cnc-ddraw
     Set-VmrMerit (-not $NoVideoFix)
-    Write-Ok "cnc-ddraw configurado (renderer=$Renderer; ajustes en $ini, sección [ddraw])"
+    Write-Ok "cnc-ddraw configurado (renderer=$Renderer, escalado=$Scaling, filtro=$f; ajustes en $ini, sección [ddraw])"
+}
+
+# Resolución del juego. CLASH.CFG (18 bytes): el byte 0x10 es el modo (1 = 640x480, 2 = 800x600, 3 = 1024x768).
+function Set-GameRes {
+    $res = $GameRes
+    if ($res -eq 'Auto') { $res = if ($script:NewCfg) { '1024' } else { 'Keep' } }
+    if ($res -eq 'Keep') { return }
+    $cfg = Join-Path $GameDir 'CLASH.CFG'
+    $b = [System.IO.File]::ReadAllBytes($cfg)
+    if ($b.Length -ne 18) { Write-Warn2 'CLASH.CFG con tamaño inesperado; no se cambia la resolución'; return }
+    $b[16] = @{ '640' = 1; '800' = 2; '1024' = 3 }[$res]
+    [System.IO.File]::WriteAllBytes($cfg, $b)
+    Write-Ok "Resolución del juego: $res (CLASH.CFG)"
+}
+
+# --------------------------------------------------------------------------- #
+#  5b. Vídeos a pantalla completa sin deformar (-Videos Fit)
+# --------------------------------------------------------------------------- #
+#  El juego pide a DirectShow que estire el vídeo (320x240, 4:3) a toda la ventana. En Wine se ve
+#  estirado a 16:9; en Windows 10/11 está sin verificar, por eso es opcional. VideosFit.ps1 reencodea los
+#  .MPG a la resolución EXACTA del monitor con la imagen 4:3 centrada y barras negras (MPEG-1 System, el
+#  formato que el juego ya reproduce; audio copiado sin tocar). Originales en CD\VIDEOS\ORIG. El lanzador
+#  lo vuelve a ejecutar si cambia la resolución. Mismo procedimiento que videos-fit.sh (Linux).
+$VideoFitCode = @'
+# VideosFit.ps1 — adapta los vídeos de Space Clash a la pantalla (generado por install-spaceclash.ps1)
+#   -Mode check  [-Res WxH]   ¿ya están generados? (código 0 = sí). Sin -Res: monitor principal
+#   -Mode ensure [-Res WxH]   los genera si hace falta (~1-2 min)
+#   -Mode restore             vuelve a los vídeos originales
+#   -Mode status
+param([ValidateSet('check', 'ensure', 'restore', 'status')][string]$Mode = 'status', [string]$Res = '')
+$ErrorActionPreference = 'Stop'
+$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$V = Join-Path $Root 'CD\VIDEOS'; $O = Join-Path $V 'ORIG'; $Stamp = Join-Path $V '.fit'
+$FitVersion = 1   # subir si cambian los parámetros de codificación (fuerza regenerar)
+$Sha = [ordered]@{
+    'LOGO.MPG'    = '73b260e5f9c53d198d3872719b86c99d58059fa01224cce937bcd660af97306d'
+    'DINAMIC.MPG' = '18d721c17d4f0f3cfab163ccf2255500427ce0ee9441ad97be632cdbe9d6e794'
+    'INTRO.MPG'   = '21ccc54cf26092b1fc9af45ea764f3d0e356fb993715ebc25a45b5225a577955'
+    'FINAL00.MPG' = '9d961881d5a076c6d1899e626b9ca519630aad6c7c2aea64f44f2b58493e5774'
+    'FINAL01.MPG' = '35286ae006a543096b6ee1e2bb2b17990680152703a3d790861909396535a278'
+    'FINAL02.MPG' = '76b406415b48813c0a79e83596e83bcf1f2f4e7f05a73954503a1d1a31e1ac37'
+    'FINAL03.MPG' = '13a2dd30aa8547d0560cc24fdc6ed87b3468310779c86146835cc2dabb8df983'
+}
+
+function Get-ScreenRes {   # en píxeles físicos (sin el escalado de DPI de Windows)
+    if (-not ('ScDpi' -as [type])) {
+        Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public static class ScDpi {
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+}
+"@
+    }
+    [void][ScDpi]::SetProcessDPIAware()
+    return '{0}x{1}' -f [ScDpi]::GetSystemMetrics(0), [ScDpi]::GetSystemMetrics(1)
+}
+
+function Find-Ffmpeg {
+    $local = Join-Path $Root 'tools\ffmpeg.exe'
+    if (Test-Path $local) { return $local }
+    $c = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+    if ($c) { return $c.Path }
+    return $null
+}
+
+function Test-Fit([string]$r) {
+    return (Test-Path $Stamp) -and ([System.IO.File]::ReadAllText($Stamp).Trim() -eq "$r v$FitVersion")
+}
+
+function Backup-Originals {   # copia los originales a ORIG (una sola vez)
+    New-Item -ItemType Directory -Force -Path $O | Out-Null
+    foreach ($f in $Sha.Keys) {
+        if (Test-Path (Join-Path $O $f)) { continue }
+        if (Test-Path $Stamp) { throw "Falta el original ORIG\$f y $f ya está adaptado (reinstalá el juego)." }
+        $src = Join-Path $V $f
+        if (-not (Test-Path $src)) { throw "Falta $src" }
+        if ((Get-FileHash -Algorithm SHA256 $src).Hash.ToLowerInvariant() -ne $Sha[$f]) {
+            Write-Warning "$f no coincide con el del CD conocido; se usa igual"
+        }
+        Copy-Item -Force $src (Join-Path $O "$f.part")
+        Move-Item -Force (Join-Path $O "$f.part") (Join-Path $O $f)
+    }
+}
+
+function Restore-Originals {
+    Remove-Item -Force -ErrorAction SilentlyContinue $Stamp
+    Get-ChildItem -Force -LiteralPath $V -Filter '.*.part' -ErrorAction SilentlyContinue | Remove-Item -Force
+    if (-not (Test-Path $O)) { return }
+    foreach ($f in $Sha.Keys) {
+        $src = Join-Path $O $f
+        if (Test-Path $src) { Copy-Item -Force $src (Join-Path $V $f) }
+    }
+    Remove-Item -Recurse -Force $O
+}
+
+function Invoke-Ensure([string]$r) {
+    if ($r -notmatch '^(\d+)x(\d+)$') { throw "Resolución inválida: $r" }
+    $w = [int]$Matches[1]; $h = [int]$Matches[2]
+    if (Test-Fit $r) { return }
+    $ff = Find-Ffmpeg
+    if (-not $ff) { throw 'Falta ffmpeg; se usan los vídeos actuales.' }
+    # Más de 1080 líneas no aporta nada con una fuente de 320x240: en pantallas mayores se genera a
+    # 1080 de alto con la MISMA proporción y el renderizador lo estira sin deformar.
+    if ($h -gt 1080) { $w = [int][Math]::Floor(($w * 1080 / $h + 1) / 2) * 2; $h = 1080 }
+    Backup-Originals
+    Write-Host "Generando los vídeos para $r (${w}x$h)…"
+    # setsar=1: los originales declaran un pel aspect ratio erróneo (178:163); son 4:3 con píxeles cuadrados
+    $vf = "setsar=1,scale=${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos," +
+          "pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
+    Remove-Item -Force -ErrorAction SilentlyContinue $Stamp
+    $procs = @()
+    foreach ($f in $Sha.Keys) {
+        $ffArgs = "-nostdin -v error -y -i `"$(Join-Path $O $f)`" -vf `"$vf`" " +
+                '-c:v mpeg1video -q:v 3 -maxrate 15M -bufsize 4M -g 12 -bf 2 ' +
+                "-c:a copy -f mpeg `"$(Join-Path $V ".$f.part")`""
+        $p = Start-Process -FilePath $ff -ArgumentList $ffArgs -WindowStyle Hidden -PassThru
+        $null = $p.Handle   # sin esto, ExitCode queda vacío en Windows PowerShell
+        $procs += $p
+    }
+    $ok = $true
+    foreach ($p in $procs) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { $ok = $false } }
+    foreach ($f in $Sha.Keys) {
+        $part = Join-Path $V ".$f.part"
+        if (-not (Test-Path $part) -or (Get-Item -Force $part).Length -eq 0) { $ok = $false }
+    }
+    if (-not $ok) { Restore-Originals; throw 'ffmpeg falló; se restauraron los vídeos originales.' }
+    foreach ($f in $Sha.Keys) { Move-Item -Force (Join-Path $V ".$f.part") (Join-Path $V $f) }
+    [System.IO.File]::WriteAllText($Stamp, "$r v$FitVersion")
+    Write-Host "Vídeos listos ($r)."
+}
+
+try {
+    if (-not $Res -and $Mode -in 'check', 'ensure') { $Res = Get-ScreenRes }
+    switch ($Mode) {
+        'check'   { if (Test-Fit $Res) { exit 0 } else { exit 1 } }
+        'ensure'  { Invoke-Ensure $Res }
+        'restore' { Restore-Originals }
+        'status'  { if (Test-Path $Stamp) { "adaptados: $([System.IO.File]::ReadAllText($Stamp))" } else { 'originales' } }
+    }
+    exit 0
+} catch {
+    Write-Host "VideosFit: $_" -ForegroundColor Yellow
+    exit 1
+}
+'@
+
+function Get-Ffmpeg {   # ffmpeg del PATH, o descarga de una versión fija con verificación de hash
+    $local = Join-Path $InstallDir 'tools\ffmpeg.exe'
+    if (Test-Path $local) { return $true }
+    if (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue) { Write-Ok 'ffmpeg encontrado en el PATH'; return $true }
+    Write-Step 'Descargando ffmpeg (≈110 MB, solo para adaptar los vídeos)…'
+    $zip = Join-Path $InstallDir 'ffmpeg.zip'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    try { Invoke-WebRequest -UseBasicParsing -Uri $FfmpegUrl -OutFile $zip }
+    catch { Write-Warn2 "No se pudo descargar ffmpeg ($FfmpegUrl)."; return $false }
+    if ((Get-Sha256 $zip) -ne $FfmpegSha256) {
+        Remove-Item -Force $zip; Write-Warn2 'El ffmpeg descargado no tiene el hash esperado; se descarta.'; return $false
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $local) | Out-Null
+    $za = [System.IO.Compression.ZipFile]::OpenRead($zip)
+    try {
+        $entry = $za.Entries | Where-Object { $_.FullName -match '/bin/ffmpeg\.exe$' } | Select-Object -First 1
+        if (-not $entry) { Write-Warn2 'El zip de ffmpeg no contiene bin/ffmpeg.exe.'; return $false }
+        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $local, $true)
+    } finally { $za.Dispose(); Remove-Item -Force $zip }
+    Write-Ok "ffmpeg instalado en $local"
+    return $true
+}
+
+function Install-Videos {
+    # UTF-8 con BOM: Windows PowerShell 5.1 lee los .ps1 sin BOM como ANSI
+    [System.IO.File]::WriteAllText($VideoFit, $VideoFitCode, (New-Object System.Text.UTF8Encoding $true))
+    if ($Display -ne 'Scaled' -or $Videos -ne 'Fit') {
+        & $VideoFit -Mode restore
+        Remove-Item -Force $VideoFit   # sin VideosFit.ps1 el lanzador no toca los vídeos
+        Write-Ok 'Vídeos originales'
+        return
+    }
+    if (-not (Get-Ffmpeg)) {
+        Write-Warn2 'Sin ffmpeg no se pueden adaptar los vídeos; se usan los originales. Reintentá la instalación más tarde.'
+        Remove-Item -Force $VideoFit
+        return
+    }
+    Write-Step 'Adaptando los vídeos a la resolución del monitor (4:3 centrado con barras negras; 1-2 min)…'
+    & $VideoFit -Mode ensure
+    if ($LASTEXITCODE -eq 0) { Write-Ok "Vídeos adaptados (originales en $CdDir\VIDEOS\ORIG)" }
+    else { Write-Warn2 'No se pudieron adaptar los vídeos: se usan los originales.' }
 }
 
 # --------------------------------------------------------------------------- #
@@ -439,6 +678,20 @@ try {
         $created = $true
     }
     [System.IO.File]::WriteAllText((Join-Path $Game 'CDSC.INS'), "${letter}:\", [System.Text.Encoding]::ASCII)
+    # Vídeos 4:3 con barras (-Videos Fit): regenerarlos si cambió la resolución del monitor (1-2 min)
+    $fit = Join-Path $Root 'VideosFit.ps1'
+    if (Test-Path $fit) {
+        & $fit -Mode check
+        if ($LASTEXITCODE -ne 0) {
+            L 'Adaptando los vídeos a la resolución del monitor…'
+            Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+            $tip = New-Object System.Windows.Forms.NotifyIcon
+            $tip.Icon = [System.Drawing.SystemIcons]::Information; $tip.Visible = $true
+            $tip.ShowBalloonTip(5000, 'Space Clash', 'Adaptando los vídeos a la pantalla (1-2 min)…', 'Info')
+            try { & $fit -Mode ensure 6>&1 | ForEach-Object { L "$_" } }
+            finally { $tip.Dispose() }
+        }
+    }
     L "CD en ${letter}: ; iniciando CLASH.EXE"
     $p = Start-Process -FilePath (Join-Path $Game 'CLASH.EXE') -WorkingDirectory $Game -PassThru
     $p.WaitForExit()
@@ -488,6 +741,8 @@ function Invoke-Install {
     Install-GameFiles
     Install-Patches
     Install-Display
+    Set-GameRes
+    Install-Videos
     New-Launcher
     Enable-DirectPlay
     Write-Host ''
@@ -510,8 +765,17 @@ function Invoke-Doctor {
     }
     Report 'Lanzador' (Test-Path $Launcher)
     if (Test-Path "$GameDir\ddraw.dll") {
-        Write-Host '    Modo de pantalla: Scaled'
+        $dd = @(Get-Content "$GameDir\ddraw.ini" | Where-Object { $_ -match '^(renderer|boxing|shader)=' } | Select-Object -First 3) -join '; '
+        Write-Host "    Modo de pantalla: Scaled ($dd)"
         if ($IsWin -and -not $NoVideoFix) { Report 'Vídeo: renderer GDI preferido (HKCU)' (Test-Path $VmrKey) }
+        $stamp = Join-Path $CdDir 'VIDEOS\.fit'
+        if (Test-Path $stamp) { Write-Ok "Vídeos adaptados a la pantalla ($([System.IO.File]::ReadAllText($stamp)))" }
+        else { Write-Host '    Vídeos: originales (ver -Videos Fit)' }
+        $cfgPath = "$GameDir\CLASH.CFG"
+        if (Test-Path $cfgPath) {
+            $m = ([System.IO.File]::ReadAllBytes($cfgPath))[16]
+            Write-Host ("    Resolución del juego: {0}" -f (@{ 0 = '640x400'; 1 = '640x480'; 2 = '800x600'; 3 = '1024x768' }[[int]$m]))
+        }
     } else {
         Write-Host '    Modo de pantalla: Native'
         if ($IsWin) {

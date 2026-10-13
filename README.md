@@ -4,6 +4,7 @@ Instaladores para jugar **Space Clash: The Last Frontier** (Dinamic Multimedia /
 en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
 
 - Pantalla completa en 4:3, escalada y centrada en monitores modernos (1080p, 1440p…).
+- Vídeos de introducción y finales a pantalla completa sin deformar (Linux; en Windows, opcional).
 - No hace falta el CD físico: alcanza con la imagen del disco (`.bin` + `.cue`, o `.iso`).
 - Corrige errores del juego original que lo hacían colgarse en sistemas modernos (ver
   [qué se corrige](#qué-se-corrige)).
@@ -19,7 +20,7 @@ en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
    Si solo tenés el CD físico, creá la imagen con cualquier programa de copia de CD
    (Windows: [ImgBurn](https://www.imgburn.com/) → *Crear imagen a partir del disco*;
    Linux: K3b → *Copiar medio → Solo crear imagen*).
-2. **Unos 2 GB libres** en disco.
+2. **Unos 3 GB libres** en disco.
 3. **Conexión a internet** durante la instalación (para descargar
    [cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw), que permite la pantalla completa escalada).
 
@@ -58,7 +59,7 @@ en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
    espacio vacío → *Abrir terminal aquí*).
 3. Instalá lo necesario (una sola vez; pide tu contraseña):
    ```bash
-   sudo pacman -S --needed wine 7zip python unzip curl imagemagick gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+   sudo pacman -S --needed wine 7zip python unzip curl imagemagick ffmpeg gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
    ```
 4. Instalá el juego:
    ```bash
@@ -70,7 +71,7 @@ en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
    ```
 
 Otras distribuciones: debería funcionar si instalás los paquetes equivalentes (Wine ≥ 9, 7-Zip, Python 3,
-unzip, curl y los plugins de GStreamer), pero solo se probó en CachyOS.
+unzip, curl, ffmpeg y los plugins de GStreamer), pero solo se probó en CachyOS.
 
 ---
 
@@ -81,10 +82,30 @@ unzip, curl y los plugins de GStreamer), pero solo se probó en CachyOS.
 - Las partidas se guardan dentro de la carpeta de instalación:
   - Linux: `~/Games/space-clash/prefix/drive_c/SCLASH/`
   - Windows: `%USERPROFILE%\Games\SpaceClash\SCLASH\`
-- Los vídeos se ven a pantalla completa, algo estirados a lo ancho. Es una limitación conocida del modo
-  escalado: el juego en sí se ve en 4:3. Si preferís los vídeos perfectos en una ventana chica:
-  - Linux: `bash install-spaceclash.sh install --display window`
-  - Windows: `install-spaceclash.cmd -Display Native`
+- **Vídeos:** el juego los estira a toda la pantalla. Para que se vean en 4:3, el instalador genera
+  una copia adaptada a la resolución de tu monitor, con barras negras a los lados (tarda alrededor de un
+  minuto; los originales se conservan). Si cambiás de monitor, el juego los vuelve a adaptar la próxima
+  vez que lo abras, antes de empezar.
+  - Linux: activado por defecto (necesita `ffmpeg`). Para dejar los originales:
+    `bash install-spaceclash.sh install --videos original`
+  - Windows: opcional, porque todavía no se probó en Windows real:
+    `install-spaceclash.cmd -Videos Fit` (descarga ffmpeg si no lo tenés, ≈110 MB).
+
+## Ajustar la imagen
+
+Se cambian volviendo a ejecutar el instalador con la opción (tus partidas se conservan):
+
+| Qué | Linux (`bash install-spaceclash.sh install …`) | Windows (`install-spaceclash.cmd …`) |
+|---|---|---|
+| Resolución del juego (más área visible del mapa). Una instalación nueva ya queda en 1024 | `--game-res 640\|800\|1024` | `-GameRes 640\|800\|1024` |
+| Escalado | `--scaling fit` (llena el alto) · `--scaling integer` (múltiplo exacto, más nítido, más borde) | `-Scaling Fit\|Integer` |
+| Filtro de escalado | `--filter auto\|nearest\|sharp\|smooth\|xbr\|crt` | `-Filter Auto\|Nearest\|Sharp\|Smooth\|Xbr\|Crt` (requiere `-Renderer opengl`) |
+| Vídeos | `--videos fit\|original` | `-Videos Fit\|Original` |
+
+Recomendado: 1024×768, la resolución con la que queda una instalación nueva. Si actualizás una instalación
+anterior que estaba en otra resolución, usá `--game-res 1024` (Windows: `-GameRes 1024`). En 4K, además,
+escalado entero (`--scaling integer` / `-Scaling Integer`). En Linux el renderer por defecto es `opengl`;
+los filtros no tienen efecto con `--renderer gdi`.
 
 ## Actualizar
 
@@ -118,6 +139,8 @@ instalado tiene su propia copia. Después podés borrar la carpeta descargada an
    | *"El juego está abierto. Cerralo antes de instalar"* | Cerrá el juego. Si quedó colgado, en Linux: `WINEPREFIX=~/Games/space-clash/prefix wineserver -k`; en Windows: Administrador de tareas → finalizar `CLASH.EXE`/`SPACE.EXE` |
    | Pantalla negra (se oye el juego) | Linux: `bash install-spaceclash.sh install --renderer gdi` · Windows: `install-spaceclash.cmd -Renderer gdi` |
    | Vídeos en blanco | Windows: probá `install-spaceclash.cmd -Display Native` |
+   | Vídeos estirados a lo ancho | Linux: instalá `ffmpeg` y reinstalá · Windows: `install-spaceclash.cmd -Videos Fit` |
+   | Vídeos con barras negras dobles o achicados (Windows con `-Videos Fit`) | Reinstalá sin esa opción y abrí un *issue* |
    | El juego queda minimizado | Linux: no desactives el escritorio virtual (`SC_VDESKTOP=0`) |
    | Aparece en el otro monitor | Movelo con Win/Meta + Shift + flecha |
    | *"la ejecución de scripts está deshabilitada"* (Windows) | Usá `install-spaceclash.cmd`, no el `.ps1` directamente |
@@ -152,6 +175,7 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 | Instalación | ✅ probado | ✅ probado fuera de Windows · ⏳ falta probar en Windows real |
 | Vídeos, menú, campaña planetaria y espacial | ✅ | ⏳ |
 | Pantalla completa escalada 4:3 | ✅ | ⏳ |
+| Vídeos a pantalla completa en 4:3 | ✅ | ⏳ (opcional, `-Videos Fit`) |
 | Guardar/cargar, multijugador | ⏳ | ⏳ |
 
 ## Créditos y aviso legal
