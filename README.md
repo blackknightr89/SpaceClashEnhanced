@@ -114,7 +114,7 @@ en memoria, sin cambiar la lógica del juego:
   (por ejemplo 1920×1080) en lugar de 1024×768, con mucho más mapa a la vista. Se activa al instalar con
   `--res 1920x1080` (Linux) o `-Res 1920x1080` (Windows) y se desactiva con `off`. El ancho tiene que ser
   múltiplo de 8 (1366×768 no; 1360×768 sí). Los menús siguen en 640×480 y el HUD conserva su tamaño
-  original, anclado abajo a la izquierda. El minimapa de la parte planetaria todavía no está probado. Si
+  original, centrado abajo (`centrar_hud=0` en `scenh.ini` lo deja a la izquierda, como el original). El minimapa de la parte planetaria todavía no está probado. Si
   algo se ve mal, volvé con `--res off`.
 
 Viene compilado en **SpaceClashEnhanced.zip**; si instalás desde una copia del repositorio, el instalador
