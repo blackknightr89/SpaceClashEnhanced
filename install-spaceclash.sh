@@ -423,7 +423,7 @@ set_runtime_res() {   # --res WxH: modo 1024 del juego → WxH (scenh.ini [resol
     ini_section_set "$ini" resolucion ancho "$w"
     ini_section_set "$ini" resolucion alto "$h"
     SC_GAME_RES=1024   # la resolución panorámica reemplaza al modo 1024 del juego
-    ok "Resolución panorámica (experimental, parte planetaria): ${w}x${h}"
+    ok "Resolución panorámica (experimental): ${w}x${h}"
 }
 
 find_runtime_dll() {   # imprime la ruta de scenh.dll: la del ZIP del release o la compilada aquí
@@ -1045,7 +1045,7 @@ Opciones (o variables de entorno equivalentes):
                       = 1024 en una instalación nueva; al reinstalar se conserva la elegida)
                       1024 = más área del mapa visible
   --no-patch          No aplicar el parche de compatibilidad (SC_PATCH=0)
-  --res WxH|off       EXPERIMENTAL: partida planetaria en WxH (p. ej. 1920x1080) en lugar de 1024x768,
+  --res WxH|off       EXPERIMENTAL: partida en WxH (p. ej. 1920x1080) en lugar de 1024x768,
                       con más mapa visible; requiere el runtime (SC_RES)
   --no-runtime        Sin el runtime de mejoras scenh.dll (velocidad con +/-, menos CPU) (SC_RUNTIME=0)
   --no-vdesktop       Sin escritorio virtual de Wine      (SC_VDESKTOP=0)

@@ -64,7 +64,7 @@ param(
     [string]$Python = '',
     # Sin el runtime de mejoras scenh.dll (velocidad con + y -, menos consumo de CPU, avisos en pantalla)
     [switch]$NoRuntime,
-    # EXPERIMENTAL: partida planetaria en WxH (p. ej. 1920x1080) en lugar de 1024x768, con más mapa
+    # EXPERIMENTAL: partida en WxH (p. ej. 1920x1080) en lugar de 1024x768, con más mapa
     # visible (requiere el runtime). 'off' la desactiva; vacío = no tocar
     [string]$Res = '',
     [switch]$NoShortcut,
@@ -458,7 +458,7 @@ function Install-Runtime {
         Set-ScenhKey $ini 'resolucion' 'ancho' "$($wh[0])"
         Set-ScenhKey $ini 'resolucion' 'alto' "$($wh[1])"
         $script:GameRes = '1024'   # la resolución panorámica reemplaza al modo 1024 del juego
-        Write-Ok "Resolución panorámica (experimental, parte planetaria): $Res"
+        Write-Ok "Resolución panorámica (experimental): $Res"
     }
     Write-Ok "Runtime de mejoras instalado: velocidad con + y - durante la partida (opciones en $ini)"
 }
