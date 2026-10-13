@@ -12,8 +12,8 @@ en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
   parpadeo, mucho menos consumo de CPU y **pantalla panorámica** (experimental) con el HUD centrado (ver
   [mejoras durante la partida](#mejoras-durante-la-partida)).
 
-**Parte planetaria a 1920×1080** (`--res 1920x1080`): el mapa ocupa todo el ancho, casi el triple de área
-que a 1024×768.
+**Parte planetaria a 1920×1080** (la resolución del monitor, por defecto): el mapa ocupa todo el ancho, casi
+el triple de área que a 1024×768.
 
 ![Partida planetaria a 1920×1080, con el HUD centrado](screenshots/planetaria-1080p.png)
 
@@ -121,12 +121,14 @@ en memoria, sin cambiar la lógica del juego:
 - **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
   entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.
 
-- **Pantalla panorámica (experimental):** la partida (planetaria y mapa estelar) a la resolución que elijas
-  (por ejemplo 1920×1080) en lugar de 1024×768, con mucho más mapa a la vista. Se activa al instalar con
-  `--res 1920x1080` (Linux) o `-Res 1920x1080` (Windows) y se desactiva con `off`. El ancho tiene que ser
-  múltiplo de 8 (1366×768 no; 1360×768 sí). Los menús siguen en 640×480 y el HUD conserva su tamaño
-  original, centrado abajo (`centrar_hud=0` en `scenh.ini` lo deja a la izquierda, como el original). El minimapa de la parte planetaria todavía no está probado. Si
-  algo se ve mal, volvé con `--res off`.
+- **Pantalla panorámica (experimental), activada por defecto:** la partida (planetaria y mapa estelar) a la
+  resolución de tu monitor en lugar de 1024×768, con mucho más mapa a la vista. Se detecta al instalar de
+  cero; en monitores más grandes que 2560 px de ancho (4K, ultrawide) se usa la mitad exacta para un
+  escalado nítido (3840×2160 → 1920×1080). Al reinstalar se conserva lo elegido. Para otro tamaño:
+  `--res 1600x900` (Linux) o `-Res 1600x900` (Windows); para el 4:3 original: `--res off` / `-Res off`.
+  Los menús siguen en 640×480 y el HUD conserva su tamaño original, centrado abajo (`centrar_hud=0` en
+  `scenh.ini` lo deja a la izquierda, como el original). El minimapa de la parte planetaria todavía no
+  está probado. Si algo se ve mal, volvé con `--res off`.
 
 Viene compilado en **SpaceClashEnhanced.zip**; si instalás desde una copia del repositorio, el instalador
 de Linux lo compila solo si tenés MinGW (`sudo pacman -S mingw-w64-gcc`).
@@ -250,7 +252,7 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 | Vídeos escalados con IA (opcional) | ✅ | ⏳ |
 | Guardar/cargar | ✅ | ⏳ |
 | Velocidad con +/− y menos CPU (`scenh.dll`) | ✅ | ⏳ |
-| Pantalla panorámica (experimental, `--res`) | 🟡 | ⏳ |
+| Pantalla panorámica (experimental, por defecto; `--res off` la quita) | 🟡 | ⏳ |
 | Multijugador LAN | ⏳ | ⏳ |
 
 ## Créditos y aviso legal
