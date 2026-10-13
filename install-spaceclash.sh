@@ -243,10 +243,28 @@ create_prefix() {
 #  sobreescribirían las DLL de Wine y romperían el prefijo. En su lugar se
 #  replica la lista de SC.NFO: F = archivo, X = directorio, D = crear dir,
 #  "*" = solo en instalación completa (música y vídeos; el juego los lee del CD).
+# Partidas (*.sav), su índice (*.nfo) y las opciones del juego (CLASH.CFG): lo que uninstall copia a
+# ../space-clash-partidas-<fecha> y una instalación de cero ofrece restaurar.
+SAVE_GLOBS=('*.sav' '*.nfo' 'CLASH.CFG')
+
+restore_saves() {
+    local f backups=() last a
+    [[ -f "$GAME_DIR/CLASH.CFG" ]] && return
+    for f in "$GAME_DIR"/*.sav; do [[ -f "$f" ]] && return; done
+    for f in "$(dirname "$SC_ROOT")"/space-clash-partidas-*/; do [[ -d "$f" ]] && backups+=("${f%/}"); done
+    ((${#backups[@]})) || return 0
+    last=${backups[-1]}                       # el glob ordena por nombre = por fecha
+    read -r -p "Hay una copia de tus partidas en $last. ¿Restaurarla? [S/n] " a || a=""
+    [[ "$a" =~ ^[nN]$ ]] && { echo "    Sin restaurar (la copia sigue en $last)"; return; }
+    cp -p "$last"/* "$GAME_DIR/"
+    ok "Partidas restauradas desde $last"
+}
+
 install_files() {
     log "Copiando archivos del juego a $GAME_DIR…"
     mkdir -p "$GAME_DIR"
     local f d
+    restore_saves
     for f in SC.EXE CLASH.EXE SPACE.EXE UNCLASH.EXE \
              PALCF.DAT PALCS.DAT PALS.DAT PALT020.DAT PALT030.DAT PALT040.DAT ICON.ICO; do
         install -m 0644 "$CD_DIR/$f" "$GAME_DIR/$f"
@@ -757,9 +775,23 @@ cmd_doctor() {
 
 cmd_uninstall() {
     [[ -d "$SC_ROOT" ]] || { ok "Nada que desinstalar en $SC_ROOT"; return; }
-    read -r -p "¿Eliminar $SC_ROOT (prefijo, CD extraído, ISO y partidas guardadas)? [s/N] " a
+    local saves=() g f backup=""
+    for g in "${SAVE_GLOBS[@]}"; do
+        for f in "$GAME_DIR"/$g; do [[ -f "$f" ]] && saves+=("$f"); done
+    done
+    if ((${#saves[@]})) && [[ "${NO_BACKUP:-0}" != 1 ]]; then
+        backup="$(dirname "$SC_ROOT")/space-clash-partidas-$(date +%Y%m%d-%H%M%S)"
+        echo "Se eliminará $SC_ROOT. Las partidas se copian antes a $backup"
+    else
+        echo "Se eliminará $SC_ROOT (prefijo, CD extraído, ISO y ${#saves[@]} archivo(s) de partidas)."
+    fi
+    read -r -p "¿Continuar? [s/N] " a
     [[ "$a" =~ ^[sSyY]$ ]] || { echo "Cancelado."; return; }
     WINEPREFIX="$WINEPREFIX" wineserver -k 2>/dev/null || true
+    if [[ -n "$backup" ]]; then
+        mkdir -p "$backup" && cp -p "${saves[@]}" "$backup/" || die "No pude copiar las partidas a $backup; no se borró nada."
+        ok "Partidas copiadas a $backup (para recuperarlas, copialas a $GAME_DIR después de instalar)"
+    fi
     rm -rf "$SC_ROOT" "$DESKTOP_FILE" "$ICON_FILE"
     ok "Desinstalado."
 }
@@ -772,7 +804,7 @@ Comandos:
   install      Verifica la imagen, la convierte a ISO, crea el prefijo y copia el juego
   run          Ejecuta el juego
   doctor       Diagnostica la instalación
-  uninstall    Borra todo lo instalado (pide confirmación)
+  uninstall    Borra todo lo instalado (pide confirmación; antes copia las partidas)
   help         Esta ayuda
 
 Opciones (o variables de entorno equivalentes):
@@ -806,6 +838,7 @@ Opciones (o variables de entorno equivalentes):
   --install-deps      Instala dependencias con pacman si faltan
   --skip-hash         No verificar SHA-256 de la imagen
   --force             Rehace ISO, extracción y configuración aunque existan
+  --no-backup         uninstall: no copiar las partidas antes de borrar
 EOF
 }
 
@@ -835,6 +868,7 @@ while (($#)); do
         --install-deps) INSTALL_DEPS=1 ;;
         --skip-hash)    SKIP_HASH=1 ;;
         --force)        FORCE=1 ;;
+        --no-backup)    NO_BACKUP=1 ;;
         *) [[ "$CMD" == run ]] && break || die "Opción desconocida: $1" ;;
     esac
     shift

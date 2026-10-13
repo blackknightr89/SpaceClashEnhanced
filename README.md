@@ -123,7 +123,10 @@ instalado tiene su propia copia. Después podés borrar la carpeta descargada an
 - Windows: `install-spaceclash.cmd -Command uninstall`
 - Linux: `bash install-spaceclash.sh uninstall`
 
-⚠️ Esto también borra las partidas guardadas. Copialas antes si las querés conservar.
+Antes de borrar, el desinstalador **copia tus partidas** (y las opciones del juego) a una carpeta junto a
+la instalación: `~/Games/space-clash-partidas-<fecha>` en Linux, `%USERPROFILE%\Games\SpaceClash-partidas-<fecha>`
+en Windows. Si después volvés a instalar, el instalador encuentra la copia más reciente y te ofrece
+restaurarla. Si no querés la copia: `--no-backup` (Linux) o `-NoBackup` (Windows).
 
 ## Problemas
 
@@ -176,7 +179,8 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 | Vídeos, menú, campaña planetaria y espacial | ✅ | ⏳ |
 | Pantalla completa escalada 4:3 | ✅ | ⏳ |
 | Vídeos a pantalla completa en 4:3 | ✅ | ⏳ (opcional, `-Videos Fit`) |
-| Guardar/cargar, multijugador | ⏳ | ⏳ |
+| Guardar/cargar | ✅ | ⏳ |
+| Multijugador LAN | ⏳ | ⏳ |
 
 ## Créditos y aviso legal
 

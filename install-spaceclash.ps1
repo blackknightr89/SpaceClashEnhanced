@@ -58,7 +58,9 @@ param(
     [switch]$SkipHash,
     [switch]$SkipDirectPlay,
     # Para uninstall: no pedir confirmación
-    [switch]$Force
+    [switch]$Force,
+    # Para uninstall: no copiar las partidas antes de borrar
+    [switch]$NoBackup
 )
 
 Set-StrictMode -Version 2.0
@@ -292,9 +294,25 @@ function Expand-GameImage {
 #  3. Copia del juego (réplica de SC.NFO, el manifiesto del instalador original)
 # --------------------------------------------------------------------------- #
 #  No se usa INSTALAR.EXE: instalaría DirectX 6 y ActiveMovie 1.0, innecesarios y dañinos en Windows 10/11.
+# Instalación de cero: ofrecer restaurar la última copia de partidas que dejó uninstall
+# (..\SpaceClash-partidas-<fecha>: *.sav, *.nfo y CLASH.CFG).
+function Restore-Save {
+    if (Test-Path (Join-Path $GameDir 'CLASH.CFG')) { return }
+    if (@(Get-ChildItem -File -ErrorAction SilentlyContinue -Path "$GameDir\*" -Include '*.sav').Count) { return }
+    $last = Get-ChildItem -Directory -ErrorAction SilentlyContinue (Split-Path $InstallDir -Parent) -Filter 'SpaceClash-partidas-*' |
+        Sort-Object Name | Select-Object -Last 1
+    if (-not $last) { return }
+    if ((Read-Host "Hay una copia de tus partidas en $($last.FullName). ¿Restaurarla? [S/n]") -match '^[nN]') {
+        Write-Host "    Sin restaurar (la copia sigue en $($last.FullName))"; return
+    }
+    Get-ChildItem -File $last.FullName | Copy-Item -Destination $GameDir
+    Write-Ok "Partidas restauradas desde $($last.FullName)"
+}
+
 function Install-GameFiles {
     Write-Step "Copiando el juego a $GameDir…"
     New-Item -ItemType Directory -Force -Path $GameDir | Out-Null
+    Restore-Save
     foreach ($f in 'SC.EXE', 'CLASH.EXE', 'SPACE.EXE', 'UNCLASH.EXE', 'PALCF.DAT', 'PALCS.DAT', 'PALS.DAT',
                    'PALT020.DAT', 'PALT030.DAT', 'PALT040.DAT', 'ICON.ICO') {
         Copy-Item -Force (Join-Path $CdDir $f) (Join-Path $GameDir $f)
@@ -792,10 +810,23 @@ function Invoke-Doctor {
 
 function Invoke-Uninstall {
     if (-not (Test-Path $InstallDir)) { Write-Ok "Nada que desinstalar en $InstallDir"; return }
-    $saves = @(Get-ChildItem -ErrorAction SilentlyContinue "$GameDir\*.sav")
+    # Partidas (*.sav), su índice (*.nfo) y las opciones del juego (CLASH.CFG)
+    $saves = @(Get-ChildItem -File -ErrorAction SilentlyContinue -Path "$GameDir\*" -Include '*.sav', '*.nfo', 'CLASH.CFG')
+    $backup = $null
+    if ($saves.Count -and -not $NoBackup) {
+        $backup = Join-Path (Split-Path $InstallDir -Parent) ('SpaceClash-partidas-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    }
     if (-not $Force) {
-        Write-Host "Se eliminará $InstallDir (incluye $($saves.Count) archivo(s) de partidas guardadas)."
+        if ($backup) { Write-Host "Se eliminará $InstallDir. Las partidas se copian antes a $backup" }
+        else { Write-Host "Se eliminará $InstallDir (incluye $($saves.Count) archivo(s) de partidas guardadas)." }
         if ((Read-Host '¿Continuar? [s/N]') -notmatch '^[sSyY]') { Write-Host 'Cancelado.'; return }
+    }
+    if ($backup) {
+        try {
+            New-Item -ItemType Directory -Force $backup | Out-Null
+            $saves | Copy-Item -Destination $backup
+        } catch { throw "No pude copiar las partidas a ${backup}: $_. No se borró nada." }
+        Write-Ok "Partidas copiadas a $backup (para recuperarlas, copialas a $GameDir después de instalar)"
     }
     if ($IsWin) {
         foreach ($line in (cmd /c subst)) {

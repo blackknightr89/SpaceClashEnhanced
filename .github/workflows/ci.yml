@@ -1,0 +1,78 @@
+# Lint de los instaladores en cada push/PR. Al subir un tag v* arma SpaceClashEnhanced.zip y lo adjunta al
+# release del tag (si el release no existe, lo crea como borrador para escribir las notas a mano).
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck (install-spaceclash.sh)
+        run: |
+          bash -n install-spaceclash.sh
+          shellcheck -S warning install-spaceclash.sh
+
+      - name: PSScriptAnalyzer (install-spaceclash.ps1)
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          # Solo errores y sintaxis/comandos/tipos incompatibles con Windows PowerShell 5.1 (el de Windows 10/11).
+          # Las reglas de estilo (Write-Host, sustantivos en plural…) no aplican a un instalador interactivo.
+          $win51 = 'win-48_x64_10.0.17763.0_5.1.17763.316_x64_4.0.30319.42000_framework'
+          $compat = @{
+            IncludeRules = @('PSUseCompatibleSyntax', 'PSUseCompatibleCommands', 'PSUseCompatibleTypes')
+            Rules = @{
+              PSUseCompatibleSyntax   = @{ Enable = $true; TargetVersions = @('5.1') }
+              PSUseCompatibleCommands = @{ Enable = $true; TargetProfiles = @($win51) }
+              PSUseCompatibleTypes    = @{ Enable = $true; TargetProfiles = @($win51) }
+            }
+          }
+          $r = @(Invoke-ScriptAnalyzer -Path install-spaceclash.ps1 -Severity Error) +
+               @(Invoke-ScriptAnalyzer -Path install-spaceclash.ps1 -Settings $compat)
+          $r | Format-Table RuleName, Line, Message -Wrap | Out-String -Width 200
+          if ($r.Count) { exit 1 }
+
+      - name: Codificación y fines de línea del ZIP
+        run: |
+          git archive --format=tar --prefix=z/ HEAD | tar -x -C "$RUNNER_TEMP"
+          z="$RUNNER_TEMP/z"
+          # bash falla con CRLF; cmd.exe necesita CRLF; PowerShell 5.1 lee los acentos mal sin BOM
+          ! grep -q $'\r' "$z/install-spaceclash.sh" || { echo "install-spaceclash.sh tiene CRLF"; exit 1; }
+          grep -q $'\r$' "$z/install-spaceclash.cmd" || { echo "install-spaceclash.cmd no tiene CRLF"; exit 1; }
+          grep -q $'\r$' "$z/install-spaceclash.ps1" || { echo "install-spaceclash.ps1 no tiene CRLF"; exit 1; }
+          [[ "$(head -c3 "$z/install-spaceclash.ps1" | od -An -tx1 | tr -d ' ')" == efbbbf ]] \
+            || { echo "install-spaceclash.ps1 sin BOM UTF-8"; exit 1; }
+
+  release:
+    needs: lint
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Armar SpaceClashEnhanced.zip
+        run: git archive --format=zip --prefix=SpaceClashEnhanced/ -o SpaceClashEnhanced.zip "$GITHUB_REF_NAME"
+
+      - name: Adjuntar al release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" SpaceClashEnhanced.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" SpaceClashEnhanced.zip --draft \
+              --title "Space Clash Enhanced $GITHUB_REF_NAME" \
+              --notes "Descargá **SpaceClashEnhanced.zip** (abajo, en *Assets*). Ver el [README](https://github.com/$GITHUB_REPOSITORY#readme)."
+          fi
