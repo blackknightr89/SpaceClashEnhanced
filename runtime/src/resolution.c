@@ -47,7 +47,8 @@ static const ResSites SITES[] = {
      0x420CA5, 0x419A20, 0x412890},
 };
 
-static int g_w, g_h;
+static int g_w, g_h;          /* tamaño actual del modo 3 (el zoom lo cambia: resolution_set_mode3) */
+static int g_max_w, g_max_h;  /* el de scenh.ini: los búferes se reservan para este */
 static const ResSites *g_sites;
 
 static int __cdecl hud_pcx_load(const char *path, uint8_t *dst, uint8_t *pal, int flag)
@@ -154,6 +155,35 @@ void resolution_init(void)
     if (g_sites->draw_fondo)
         patch_jmp(g_sites->draw_fondo, fondo_head, sizeof fondo_head, (void *)space_draw_fondo,
                   "draw_fondo → fondo sin salirse de FONDO.PCX");
+    g_max_w = g_w;
+    g_max_h = g_h;
     log_printf("resolución del modo 1024 cambiada a %dx%d", g_w, g_h);
     hud_init(g_w);
+}
+
+/* Tamaño máximo configurado (0 si la resolución panorámica no está activa). */
+int resolution_max(int *w, int *h)
+{
+    if (!g_max_w)
+        return 0;
+    *w = g_max_w;
+    *h = g_max_h;
+    return 1;
+}
+
+/* Cambia en caliente el tamaño lógico del modo 3 (para el zoom): los inmediatos de apply_mode_layout.
+ * La tabla de modos queda en el máximo, así que las superficies de DirectDraw se crean siempre a ese
+ * tamaño y el zoom escala por software (zoom.c). Solo CLASH (las dos primeras entradas de imms son las de
+ * apply_mode_layout). */
+int resolution_set_mode3(int w, int h)
+{
+    if (!g_max_w || !g_sites || g_sites->kind != EXE_CLASH || w > g_max_w || h > g_max_h || w < HUD_W)
+        return 0;
+    uint16_t old_h = (uint16_t)g_h, new_h = (uint16_t)h, old_w = (uint16_t)g_w, new_w = (uint16_t)w;
+    if (!patch_bytes(g_sites->imms[0].at, &old_h, &new_h, 2, "zoom: alto del modo 3") ||
+        !patch_bytes(g_sites->imms[1].at, &old_w, &new_w, 2, "zoom: ancho del modo 3"))
+        return 0;
+    g_w = w;
+    g_h = h;
+    return 1;
 }

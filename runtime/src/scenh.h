@@ -57,6 +57,8 @@ void osd_show(const char *text, DWORD ms);
 
 /* resolution.c */
 void resolution_init(void);
+int  resolution_max(int *w, int *h);
+int  resolution_set_mode3(int w, int h);
 
 /* cursor.c */
 void cursor_init(void);
@@ -69,5 +71,7 @@ int  hud_offset(int screen_w);
 void zoom_init(void);
 int  zoom_on_message(UINT msg, WPARAM wp);
 void zoom_apply_pending(void);
+void zoom_before_flip(void);
+LPARAM zoom_translate_mouse(UINT msg, LPARAM lp);
 
 #endif
