@@ -22,7 +22,7 @@ typedef int(__cdecl *fn1)(int);
 typedef int(__cdecl *fn2)(int, int);
 typedef int(__cdecl *fn4)(int, int, int, int);
 
-enum { W_BEGIN4, W_SUSPEND2, W_SUSPEND_BUF1, W_END2, W_END0, W_CALL2_END, W_ISOLATED1, W_MOUSE0 };
+enum { W_BEGIN4, W_SUSPEND2, W_SUSPEND_BUF1, W_END2, W_END0, W_CALL2_END, W_ISOLATED1, W_MOUSE0, W_MOUSE_CURSOR0 };
 typedef struct { uintptr_t at, target; int kind; } HudCall;
 
 typedef struct {
@@ -31,6 +31,7 @@ typedef struct {
     uintptr_t window_flag; int window_none;   /* valor del indicador cuando no hay ventana abierta */
     int window_is_int16;
     HudCall calls[12];
+    uintptr_t cursor_sprites; int n_cursor_sprites;   /* sprites del cursor: {u8 activo; ...; int x @4; int y @8} */
 } HudSites;
 
 static const HudSites SITES[] = {
@@ -41,16 +42,18 @@ static const HudSites SITES[] = {
       {0x41E198, 0x41A890, W_END2},            /* fin del tramo */
       {0x41E1A0, 0x43CD90, W_END0},
       {0x41A657, 0x42A540, W_MOUSE0},          /* forma del cursor / zona */
-      {0x41A65C, 0x42AF80, W_MOUSE0},          /* minimapa: posición bajo el ratón */
+      {0x41A65C, 0x42AF80, W_MOUSE_CURSOR0},   /* minimapa bajo el ratón; también ubica el cursor */
       {0x42BCCC, 0x419030, W_MOUSE0},          /* minimapa: clic y desplazamiento por bordes */
       {0x42BD45, 0x42B670, W_MOUSE0},          /* ventanas */
-      {0x42BD4A, 0x42BAF0, W_MOUSE0}}},        /* botones del HUD */
+      {0x42BD4A, 0x42BAF0, W_MOUSE0}},         /* botones del HUD */
+     0x8F1FC0, 30},
     {EXE_SPACE, 0x487D0C, 0x817090, 0x817092, 0x73F9D8, 0x73F9C4, 0x73F9C8, 0x71EE30, 0, 0,
      {{0x4133B7, 0x412B30, W_ISOLATED1},       /* minimapa del HUD (arg 0; con 1 es la carta grande F8) */
       {0x4133E7, 0x430410, W_BEGIN4},          /* set_clip(0,0,w-1,h-1) antes de draw_hud_panels */
       {0x413467, 0x404C70, W_CALL2_END},       /* último botón del HUD (0x98A260): fin del tramo */
       {0x41CC0A, 0x413050, W_MOUSE0},          /* game_logic_step: botones, minimapa, bordes */
-      {0x412466, 0x41C5D0, W_MOUSE0}}},        /* zona y forma del cursor */
+      {0x412466, 0x41C5D0, W_MOUSE_CURSOR0}},  /* zona y forma del cursor; también lo ubica */
+     0x98A360, 37},
 };
 
 static const HudSites *S;
@@ -114,6 +117,27 @@ static void end(void)
     g_drawing = 0;
 }
 
+/* Las funciones que ubican el sprite del cursor lo hacen con la posición del ratón que ven: si se les
+ * mostró dx más a la izquierda, los sprites que movieron se devuelven a la posición real. */
+static int call_mouse_cursor(uintptr_t target)
+{
+    static int32_t before[64];
+    int n = S->n_cursor_sprites;
+    for (int i = 0; i < n; i++)
+        before[i] = I32(S->cursor_sprites + i * 0x18 + 4);
+    mouse_shift(active_dx());
+    int dx = g_mouse_shifted;
+    int r = ((fn0)target)();
+    mouse_unshift();
+    if (dx)
+        for (int i = 0; i < n; i++) {
+            uintptr_t x = S->cursor_sprites + i * 0x18 + 4;
+            if (I32(x) != before[i])
+                I32(x) += dx;
+        }
+    return r;
+}
+
 /* Un envoltorio por llamada: cada uno guarda su destino original. */
 static uintptr_t g_target[12];
 
@@ -130,6 +154,7 @@ static uintptr_t g_target[12];
         case W_END0: end(); return ((fn0)g_target[n])();                                             \
         case W_CALL2_END: { int r = ((fn2)g_target[n])(a, b); end(); return r; }                     \
         case W_ISOLATED1: { begin(); int r = ((fn1)g_target[n])(a); end(); return r; }               \
+        case W_MOUSE_CURSOR0: return call_mouse_cursor(g_target[n]);                                 \
         default: { mouse_shift(active_dx()); int r = ((fn0)g_target[n])(); mouse_unshift();         \
                    return r; }                                                                        \
         }                                                                                             \

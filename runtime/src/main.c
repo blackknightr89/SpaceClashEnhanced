@@ -102,6 +102,7 @@ static void init(void)
     }
     hook_import("USER32.dll", "RegisterClassExA", (void *)hk_RegisterClassExA);
     osd_init();
+    cursor_init();
     resolution_init();
     zoom_init();
     speed_init();

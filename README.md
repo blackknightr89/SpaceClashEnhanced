@@ -107,6 +107,7 @@ en memoria, sin cambiar la lógica del juego:
 - **Zoom con la rueda del ratón** (parte planetaria): hacia adelante acerca (640×480), hacia atrás aleja
   (1024×768, o la resolución panorámica si la activaste), sin pasar por Opciones. No actúa en pausa ni en
   multijugador.
+- **Cursor sin parpadeo:** con cnc-ddraw y Wine el cursor del original parpadeaba durante la partida.
 - **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
   entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.
 

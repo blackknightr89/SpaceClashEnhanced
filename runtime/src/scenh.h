@@ -58,6 +58,9 @@ void osd_show(const char *text, DWORD ms);
 /* resolution.c */
 void resolution_init(void);
 
+/* cursor.c */
+void cursor_init(void);
+
 /* hud.c */
 void hud_init(int wide_w);
 int  hud_offset(int screen_w);
