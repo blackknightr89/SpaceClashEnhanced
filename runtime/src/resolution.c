@@ -54,20 +54,22 @@ static int __cdecl hud_pcx_load(const char *path, uint8_t *dst, uint8_t *pal, in
 {
     static uint8_t tmp[HUD_W * HUD_H];
     int r = ((pcx_load_fn)g_sites->pcx_load)(path, tmp, pal, flag);
+    int dx = hud_offset(g_w);   /* 0 = anclado a la izquierda; si no, centrado (hud.c) */
     memset(dst, 0, (size_t)g_w * g_h);
     for (int y = 0; y < HUD_H; y++) {   /* anclado abajo; si el alto es menor, se recorta por arriba */
         int dy = y + g_h - HUD_H;
         if (dy >= 0)
-            memcpy(dst + (size_t)dy * g_w, tmp + (size_t)y * HUD_W, HUD_W);
+            memcpy(dst + (size_t)dy * g_w + dx, tmp + (size_t)y * HUD_W, HUD_W);
     }
-    /* A la derecha de los 1024 px: se prolonga la moldura superior (filas 601–629, lisa entre x=650 y 760)
-     * repitiendo un tramo de 32 px; debajo queda negro como el fondo de los paneles. */
+    /* Fuera de los 1024 px del HUD: se prolonga la moldura superior (filas 601–629, lisa entre x=650 y
+     * 760) repitiendo un tramo de 32 px; debajo queda negro como el fondo de los paneles. */
     for (int y = 601; y <= 629; y++) {
         int dy = y + g_h - HUD_H;
         if (dy < 0)
             continue;
-        for (int x = HUD_W; x < g_w; x++)
-            dst[(size_t)dy * g_w + x] = tmp[(size_t)y * HUD_W + 700 + (x - HUD_W) % 32];
+        for (int x = 0; x < g_w; x++)
+            if (x < dx || x >= dx + HUD_W)
+                dst[(size_t)dy * g_w + x] = tmp[(size_t)y * HUD_W + 700 + ((x - dx) % 32 + 32) % 32];
     }
     return r;
 }
@@ -153,4 +155,5 @@ void resolution_init(void)
         patch_jmp(g_sites->draw_fondo, fondo_head, sizeof fondo_head, (void *)space_draw_fondo,
                   "draw_fondo → fondo sin salirse de FONDO.PCX");
     log_printf("resolución del modo 1024 cambiada a %dx%d", g_w, g_h);
+    hud_init(g_w);
 }
