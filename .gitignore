@@ -1,0 +1,31 @@
+# --- Archivos del juego: NUNCA subirlos (copyright; además superan el límite de GitHub) ---
+disk/*
+!disk/README.md
+*.bin
+*.cue
+*.iso
+*.img
+*.mdf
+*.mds
+*.ccd
+*.nrg
+*.7z
+*.EXE
+*.exe
+*.sav
+
+# --- Generados por los instaladores / el juego ---
+logs/
+*.log
+backtrace.txt
+cnc-ddraw.zip
+
+# --- Sistema / editores ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# --- Documentación técnica interna (no se publica) ---
+docs/
