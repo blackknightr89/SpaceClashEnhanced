@@ -35,3 +35,6 @@ __pycache__/
 
 # --- Proyecto Ghidra (contiene los EXE originales) y exportaciones del kit de RE ---
 re/proyecto/
+
+# --- Runtime de mejoras: binarios compilados (el ZIP del release los trae ya hechos) ---
+runtime/build/

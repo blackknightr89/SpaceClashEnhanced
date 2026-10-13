@@ -1,0 +1,5 @@
+; scenh.dll ocupa el lugar de GDI32.dll en la tabla de imports de CLASH.EXE y SPACE.EXE (el instalador
+; renombra "GDI32.dll" a "SCENH.dll"). Lo único que el juego importa de GDI32 es GetStockObject.
+LIBRARY scenh.dll
+EXPORTS
+    GetStockObject = gdi32.GetStockObject

@@ -8,6 +8,8 @@ en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
 - No hace falta el CD físico: alcanza con la imagen del disco (`.bin` + `.cue`, o `.iso`).
 - Corrige errores del juego original que lo hacían colgarse en sistemas modernos (ver
   [qué se corrige](#qué-se-corrige)).
+- **Mejoras de juego:** velocidad ajustable con las teclas **+** y **−**, y mucho menos consumo de CPU (ver
+  [mejoras durante la partida](#mejoras-durante-la-partida)).
 
 > ⚠️ **Este repositorio NO incluye el juego.** Necesitás tu propia copia del CD original de Space Clash
 > (edición española) en forma de imagen de disco. Aquí solo hay instaladores y documentación.
@@ -93,6 +95,23 @@ unzip, curl, ffmpeg y los plugins de GStreamer), pero solo se probó en CachyOS.
     `bash install-spaceclash.sh install --videos original`
   - Windows: opcional, porque todavía no se probó en Windows real:
     `install-spaceclash.cmd -Videos Fit` (descarga ffmpeg si no lo tenés, ≈110 MB).
+
+## Mejoras durante la partida
+
+Los instaladores agregan `scenh.dll`, un módulo propio que el juego carga al arrancar y que aplica mejoras
+en memoria, sin cambiar la lógica del juego:
+
+- **Velocidad de juego:** **+** acelera y **−** frena (fila de números o teclado numérico): 50 %, 75 %,
+  100 %, 150 %, 200 % y 300 %. Se ve un aviso arriba de la pantalla ("VELOCIDAD X2") y se recuerda para la
+  próxima vez. Afecta a todo por igual (unidades, producción, reloj de misión). En multijugador queda fija.
+- **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
+  entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.
+
+Viene compilado en **SpaceClashEnhanced.zip**; si instalás desde una copia del repositorio, el instalador
+de Linux lo compila solo si tenés MinGW (`sudo pacman -S mingw-w64-gcc`).
+
+Cada mejora se puede desactivar en `scenh.ini`, en la carpeta de las partidas. Para instalar sin ellas:
+`--no-runtime` (Linux) o `-NoRuntime` (Windows). Lo que se aplicó queda registrado en `scenh.log`.
 
 ## Ajustar la imagen
 
@@ -209,6 +228,7 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 | Vídeos a pantalla completa en 4:3 | ✅ | ⏳ (opcional, `-Videos Fit`) |
 | Vídeos escalados con IA (opcional) | ✅ | ⏳ |
 | Guardar/cargar | ✅ | ⏳ |
+| Velocidad con +/− y menos CPU (`scenh.dll`) | ✅ | ⏳ |
 | Multijugador LAN | ⏳ | ⏳ |
 
 ## Créditos y aviso legal
@@ -227,7 +247,8 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 
 Installers to play the Spanish edition of **Space Clash: The Last Frontier** (1999) on modern **Linux**
 (via Wine) and **Windows 10/11**. They include scaled 4:3 fullscreen and binary patches for the original
-game's crash bugs. **The game is not included**: download **SpaceClashEnhanced.zip** from
+game's crash bugs, plus an in-memory runtime (`scenh.dll`): adjustable game speed with the **+**/**−** keys and
+much lower CPU usage. **The game is not included**: download **SpaceClashEnhanced.zip** from
 [Releases](https://github.com/blackknightr89/SpaceClashEnhanced/releases/latest), extract it, and put
 your own CD image (`.bin`/`.cue` or `.iso`) in `SpaceClashEnhanced/disk/`.
 Then run `install-spaceclash.cmd` (Windows) or `bash install-spaceclash.sh install` (Linux).
