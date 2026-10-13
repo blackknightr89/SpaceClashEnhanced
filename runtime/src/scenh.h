@@ -40,6 +40,9 @@ void cfg_set_int(const char *section, const char *key, int value);
 int   patch_bytes(uintptr_t addr, const void *expected, const void *repl, size_t n, const char *what);
 int   patch_jmp(uintptr_t addr, const void *expected, size_t n, void *target, const char *what);
 void *hook_import(const char *dll, const char *func, void *replacement);
+typedef struct { const char *dll, *func; void *mine; void **slot; void *next; } ImportHook;
+int   import_hook_install(ImportHook *h);
+void  import_hooks_refresh(void);
 
 /* speed.c */
 void speed_init(void);
@@ -54,5 +57,10 @@ void osd_show(const char *text, DWORD ms);
 
 /* resolution.c */
 void resolution_init(void);
+
+/* zoom.c */
+void zoom_init(void);
+int  zoom_on_message(UINT msg, WPARAM wp);
+void zoom_apply_pending(void);
 
 #endif

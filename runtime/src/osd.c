@@ -92,6 +92,7 @@ static void draw(uint8_t *px, int pitch, int w, int h)
 
 static void osd_flip(void)
 {
+    import_hooks_refresh();
     IDirectDrawSurface *primary = *(IDirectDrawSurface **)g_game->dds_primary;
     IDirectDrawSurface *back = *(IDirectDrawSurface **)g_game->dds_back;
     if (g_text[0] && back) {

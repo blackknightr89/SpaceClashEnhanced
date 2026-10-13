@@ -104,6 +104,9 @@ en memoria, sin cambiar la lógica del juego:
 - **Velocidad de juego:** **+** acelera y **−** frena (fila de números o teclado numérico): 50 %, 75 %,
   100 %, 150 %, 200 % y 300 %. Se ve un aviso arriba de la pantalla ("VELOCIDAD X2") y se recuerda para la
   próxima vez. Afecta a todo por igual (unidades, producción, reloj de misión). En multijugador queda fija.
+- **Zoom con la rueda del ratón** (parte planetaria): hacia adelante acerca (640×480), hacia atrás aleja
+  (1024×768, o la resolución panorámica si la activaste), sin pasar por Opciones. No actúa en pausa ni en
+  multijugador.
 - **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
   entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.
 

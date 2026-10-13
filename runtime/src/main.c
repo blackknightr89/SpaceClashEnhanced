@@ -49,7 +49,8 @@ void cfg_set_int(const char *section, const char *key, int value)
 
 static LRESULT CALLBACK hk_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
-    if (speed_on_key(h, msg, wp))
+    import_hooks_refresh();
+    if (speed_on_key(h, msg, wp) || zoom_on_message(msg, wp))
         return 0;
     return CallWindowProcA(g_game_wndproc, h, msg, wp, lp);
 }
@@ -101,8 +102,9 @@ static void init(void)
     }
     hook_import("USER32.dll", "RegisterClassExA", (void *)hk_RegisterClassExA);
     osd_init();
-    speed_init();
     resolution_init();
+    zoom_init();
+    speed_init();
 }
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)

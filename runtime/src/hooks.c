@@ -43,8 +43,7 @@ int patch_jmp(uintptr_t addr, const void *expected, size_t n, void *target, cons
     return patch_bytes(addr, expected, jmp, n, what);
 }
 
-/* Cambia la entrada de la IAT del EXE para dll!func. Devuelve la función original o NULL. */
-void *hook_import(const char *dll, const char *func, void *replacement)
+static void **find_iat_slot(const char *dll, const char *func)
 {
     uint8_t *base = (uint8_t *)GetModuleHandleA(NULL);
     IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
@@ -60,20 +59,66 @@ void *hook_import(const char *dll, const char *func, void *replacement)
             if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal))
                 continue;
             IMAGE_IMPORT_BY_NAME *ibn = (IMAGE_IMPORT_BY_NAME *)(base + names->u1.AddressOfData);
-            if (strcmp((char *)ibn->Name, func) != 0)
-                continue;
-            void *orig = (void *)iat->u1.Function;
-            void *real = (void *)GetProcAddress(GetModuleHandleA(dll), func);
-            if (orig != real) {  /* IAT todavía sin resolver o ya enganchada por otro */
-                log_printf("RECHAZADO import %s!%s: la IAT no apunta a la función real", dll, func);
-                return NULL;
-            }
-            if (!write_mem((uintptr_t)&iat->u1.Function, &replacement, sizeof replacement))
-                return NULL;
-            log_printf("ok import %s!%s", dll, func);
-            return orig;
+            if (strcmp((char *)ibn->Name, func) == 0)
+                return (void **)&iat->u1.Function;
         }
     }
-    log_printf("RECHAZADO import %s!%s: no está en el EXE", dll, func);
     return NULL;
+}
+
+/* Cambia la entrada de la IAT del EXE para dll!func. Devuelve la función original o NULL. */
+void *hook_import(const char *dll, const char *func, void *replacement)
+{
+    void **slot = find_iat_slot(dll, func);
+    if (!slot) {
+        log_printf("RECHAZADO import %s!%s: no está en el EXE", dll, func);
+        return NULL;
+    }
+    void *orig = *slot;
+    void *real = (void *)GetProcAddress(GetModuleHandleA(dll), func);
+    if (orig != real) {  /* IAT todavía sin resolver o ya enganchada por otro */
+        log_printf("RECHAZADO import %s!%s: la IAT no apunta a la función real", dll, func);
+        return NULL;
+    }
+    if (!write_mem((uintptr_t)slot, &replacement, sizeof replacement))
+        return NULL;
+    log_printf("ok import %s!%s", dll, func);
+    return orig;
+}
+
+/* Ganchos encadenados: cnc-ddraw (modo scaled) también reemplaza entradas de USER32 en la IAT del juego
+ * cuando se crea DirectDraw, después de nosotros. import_hooks_refresh() lo detecta, guarda la función
+ * que dejó el otro módulo como siguiente eslabón (h->next) y vuelve a poner la nuestra delante. */
+static ImportHook *g_hooks[16];
+static int g_nhooks;
+
+int import_hook_install(ImportHook *h)
+{
+    h->slot = find_iat_slot(h->dll, h->func);
+    h->next = (void *)GetProcAddress(GetModuleHandleA(h->dll), h->func);
+    if (!h->slot || !h->next || g_nhooks == (int)(sizeof g_hooks / sizeof *g_hooks)) {
+        log_printf("RECHAZADO import %s!%s", h->dll, h->func);
+        return 0;
+    }
+    if (*h->slot != h->next)
+        h->next = *h->slot;   /* ya había otro gancho: encadenarlo */
+    if (!write_mem((uintptr_t)h->slot, &h->mine, sizeof h->mine))
+        return 0;
+    g_hooks[g_nhooks++] = h;
+    log_printf("ok import %s!%s", h->dll, h->func);
+    return 1;
+}
+
+void import_hooks_refresh(void)
+{
+    for (int i = 0; i < g_nhooks; i++) {
+        ImportHook *h = g_hooks[i];
+        void *cur = *h->slot;
+        if (cur == h->mine)
+            continue;
+        h->next = cur;
+        write_mem((uintptr_t)h->slot, &h->mine, sizeof h->mine);
+        log_printf("import %s!%s reemplazado por otro módulo (0x%08lx): encadenado", h->dll, h->func,
+                   (unsigned long)(uintptr_t)cur);
+    }
 }

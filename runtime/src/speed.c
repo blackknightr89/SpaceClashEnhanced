@@ -22,6 +22,12 @@ static HWND g_timer_hwnd;
 static TIMERPROC g_timer_proc;
 static int g_timer_set;
 static int g_debug;
+static ImportHook g_hk_settimer = {"USER32.dll", "SetTimer", (void *)hk_SetTimer, 0, 0};
+static ImportHook g_hk_killtimer = {"USER32.dll", "KillTimer", (void *)hk_KillTimer, 0, 0};
+static ImportHook g_hk_peek = {"USER32.dll", "PeekMessageA", (void *)hk_PeekMessageA, 0, 0};
+typedef UINT_PTR(WINAPI *settimer_fn)(HWND, UINT_PTR, UINT, TIMERPROC);
+typedef BOOL(WINAPI *killtimer_fn)(HWND, UINT_PTR);
+typedef BOOL(WINAPI *peek_fn)(LPMSG, HWND, UINT, UINT, UINT);
 
 static int threshold_for(int pct)
 {
@@ -80,15 +86,14 @@ void speed_init(void)
         g_speed_ok = 0;
     }
     if (g_speed_ok) {
-        hook_import("USER32.dll", "SetTimer", (void *)hk_SetTimer);
-        hook_import("USER32.dll", "KillTimer", (void *)hk_KillTimer);
+        import_hook_install(&g_hk_settimer);
+        import_hook_install(&g_hk_killtimer);
         apply_level(0);
     }
-    if (g_cpu || g_debug) {
-        if (g_cpu)
-            timeBeginPeriod(1);
-        hook_import("USER32.dll", "PeekMessageA", (void *)hk_PeekMessageA);
-    }
+    if (g_cpu)
+        timeBeginPeriod(1);
+    /* también lo usa el zoom (zoom.c) para aplicar el cambio de modo entre fotogramas */
+    import_hook_install(&g_hk_peek);
 }
 
 /* Devuelve 1 si consumió la tecla. */
@@ -125,14 +130,14 @@ UINT_PTR WINAPI hk_SetTimer(HWND h, UINT_PTR id, UINT ms, TIMERPROC proc)
         g_timer_set = 1;
         ms = in_multiplayer() ? 1000 : (UINT)timer_ms();
     }
-    return SetTimer(h, id, ms, proc);
+    return ((settimer_fn)g_hk_settimer.next)(h, id, ms, proc);
 }
 
 BOOL WINAPI hk_KillTimer(HWND h, UINT_PTR id)
 {
     if (id == 1 && h == g_timer_hwnd)
         g_timer_set = 0;
-    return KillTimer(h, id);
+    return ((killtimer_fn)g_hk_killtimer.next)(h, id);
 }
 
 /* depurar=1: ticks de simulación por segundo en scenh.log, cada 5 s */
@@ -158,7 +163,17 @@ static void measure(void)
 
 BOOL WINAPI hk_PeekMessageA(LPMSG m, HWND h, UINT lo, UINT hi, UINT remove)
 {
-    BOOL r = PeekMessageA(m, h, lo, hi, remove);
+    if (g_game->kind == EXE_CLASH)
+        zoom_apply_pending();
+    static int depth;   /* por si otro eslabón volviera a llamar por la IAT: ir directo a USER32 */
+    BOOL r;
+    if (depth) {
+        r = PeekMessageA(m, h, lo, hi, remove);
+    } else {
+        depth++;
+        r = ((peek_fn)g_hk_peek.next)(m, h, lo, hi, remove);
+        depth--;
+    }
     if (g_debug)
         measure();
     if (!r && g_cpu) {
