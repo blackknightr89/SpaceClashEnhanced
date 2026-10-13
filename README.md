@@ -8,8 +8,18 @@ en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
 - No hace falta el CD físico: alcanza con la imagen del disco (`.bin` + `.cue`, o `.iso`).
 - Corrige errores del juego original que lo hacían colgarse en sistemas modernos (ver
   [qué se corrige](#qué-se-corrige)).
-- **Mejoras de juego:** velocidad ajustable con las teclas **+** y **−**, y mucho menos consumo de CPU (ver
+- **Mejoras de juego:** velocidad ajustable con **+** y **−**, zoom con la rueda del ratón, cursor sin
+  parpadeo, mucho menos consumo de CPU y **pantalla panorámica** (experimental) con el HUD centrado (ver
   [mejoras durante la partida](#mejoras-durante-la-partida)).
+
+**Parte planetaria a 1920×1080** (`--res 1920x1080`): el mapa ocupa todo el ancho, casi el triple de área
+que a 1024×768.
+
+![Partida planetaria a 1920×1080, con el HUD centrado](screenshots/planetaria-1080p.png)
+
+**Mapa estelar a 1920×1080:**
+
+![Mapa estelar a 1920×1080, con el HUD centrado](screenshots/espacial-1080p.png)
 
 > ⚠️ **Este repositorio NO incluye el juego.** Necesitás tu propia copia del CD original de Space Clash
 > (edición española) en forma de imagen de disco. Aquí solo hay instaladores y documentación.

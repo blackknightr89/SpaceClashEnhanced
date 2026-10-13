@@ -17,3 +17,4 @@
 .github        export-ignore
 tools/re       export-ignore
 re             export-ignore
+screenshots   export-ignore
