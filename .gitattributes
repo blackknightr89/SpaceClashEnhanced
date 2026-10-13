@@ -1,6 +1,7 @@
 * text=auto
 # Linux: LF obligatorio (bash falla con CRLF)
 *.sh   text eol=lf
+*.py   text eol=lf
 *.md   text eol=lf
 # Windows: CRLF (cmd.exe necesita CRLF en los .cmd/.bat)
 *.cmd  text eol=crlf

@@ -22,6 +22,9 @@ jobs:
           bash -n install-spaceclash.sh
           shellcheck -S warning install-spaceclash.sh
 
+      - name: Sintaxis de las herramientas Python
+        run: python3 -m py_compile tools/*.py
+
       - name: PSScriptAnalyzer (install-spaceclash.ps1)
         shell: pwsh
         run: |

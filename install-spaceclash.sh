@@ -35,6 +35,8 @@ SC_VDESKTOP_RES="${SC_VDESKTOP_RES:-auto}"              # tamaño del escritorio
 SC_GAMESCOPE="${SC_GAMESCOPE:-0}"                       # 1 = envolver con gamescope (escalado a pantalla completa)
 SC_FULL="${SC_FULL:-0}"                                 # 1 = copiar música y vídeos al disco
 SC_VIDEOS="${SC_VIDEOS:-fit}"                           # fit (vídeos 4:3 con barras a la resolución del monitor) | original
+SC_VIDEOS_AI="${SC_VIDEOS_AI:-ask}"                     # ask (preguntar, def. no) | off | general | general-sharp | x4plus: vídeos con IA
+SC_PYTHON="${SC_PYTHON:-}"                              # Python con torch + spandrel (vacío = buscarlo; ver setup_videos_ai)
 SC_DESKTOP="${SC_DESKTOP:-1}"                           # 1 = crear acceso directo .desktop
 SC_CD_LETTER="${SC_CD_LETTER:-r}"                       # letra del CD virtual (R:; S:/T: las reserva Proton)
 SC_CNC_URL="${SC_CNC_URL:-https://github.com/FunkyFr3sh/cnc-ddraw/releases/download/v7.1.0.0/cnc-ddraw.zip}"
@@ -51,6 +53,8 @@ GAME_DIR="$WINEPREFIX/drive_c/SCLASH"        # misma ruta por defecto que el ins
 LAUNCHER="$SC_ROOT/spaceclash.sh"
 LOG_DIR="$SC_ROOT/logs"
 DESKTOP_FILE="$HOME/.local/share/applications/space-clash.desktop"
+DESKTOP_FILE_NV="$HOME/.local/share/applications/space-clash-sin-videos.desktop"   # sin vídeos de inicio
+NOVID_DIR="$SC_ROOT/cd-sin-videos"           # vista del CD sin LOGO/DINAMIC/INTRO (la arma el lanzador)
 ICON_FILE="$HOME/.local/share/icons/hicolor/48x48/apps/space-clash.png"
 
 export WINEDEBUG="${WINEDEBUG:--all}"
@@ -507,10 +511,12 @@ create_video_helper() {
 #   videos-fit.sh ensure WxH   los genera para WxH si hace falta (~1 min)
 #   videos-fit.sh restore      vuelve a los vídeos originales
 #   videos-fit.sh status       muestra el estado
+# Si existe un máster escalado con IA (tools/upscale-videos.py → videos-hd/), se usa como fuente.
 set -uo pipefail
-V="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cd/VIDEOS"
-O="$V/ORIG"; STAMP="$V/.fit"
-FIT_VERSION=1   # subir si cambian los parámetros de codificación (fuerza regenerar)
+R="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+V="$R/cd/VIDEOS"; O="$V/ORIG"; STAMP="$V/.fit"
+HD="${SC_VIDEOS_HD:-$R/videos-hd}"
+FIT_VERSION=2   # subir si cambian los parámetros de codificación (fuerza regenerar)
 declare -A SHA=(
     [LOGO.MPG]=73b260e5f9c53d198d3872719b86c99d58059fa01224cce937bcd660af97306d
     [DINAMIC.MPG]=18d721c17d4f0f3cfab163ccf2255500427ce0ee9441ad97be632cdbe9d6e794
@@ -544,7 +550,12 @@ restore() {
     rm -rf "$O"
 }
 
-check() { [[ "$(cat "$STAMP" 2>/dev/null)" == "$1 v$FIT_VERSION" ]]; }
+# Fuente de cada vídeo: el máster HD si está completo, si no el original de 320x240
+hd_ok() { [[ -f "$HD/manifest.json" ]] && for f in "${!SHA[@]}"; do [[ -s "$HD/${f%.MPG}.mkv" ]] || return 1; done; }
+source_tag() { if hd_ok; then echo "hd-$(cksum <"$HD/manifest.json" | cut -d' ' -f1)"; else echo orig; fi; }
+src_of() { if hd_ok; then echo "$HD/${1%.MPG}.mkv"; else echo "$O/$1"; fi; }
+
+check() { [[ "$(cat "$STAMP" 2>/dev/null)" == "$1 v$FIT_VERSION $(source_tag)" ]]; }
 
 ensure() {
     local res=$1 w h vf f p ok=1 pids=()
@@ -552,18 +563,21 @@ ensure() {
     w=${BASH_REMATCH[1]}; h=${BASH_REMATCH[2]}
     check "$res" && return 0
     command -v ffmpeg >/dev/null || fail "falta ffmpeg; se usan los vídeos actuales"
-    # Más de 1080 líneas no aporta nada con una fuente de 320x240: en pantallas mayores se genera a
-    # 1080 de alto con la MISMA proporción y el renderizador lo estira sin deformar.
+    # Más de 1080 líneas no aporta nada (fuente de 320x240, o máster HD de 960): en pantallas mayores se
+    # genera a 1080 de alto con la MISMA proporción y el renderizador lo estira sin deformar.
     if ((h > 1080)); then w=$(( (w * 1080 / h + 1) / 2 * 2 )); h=1080; fi
     backup
-    echo "videos-fit: generando los vídeos para $res (${w}x$h)…"
+    local tag q=3 rate=15M
+    tag=$(source_tag)
+    [[ $tag == hd-* ]] && { q=2; rate=30M; }   # el máster tiene detalle real: más bitrate
+    echo "videos-fit: generando los vídeos para $res (${w}x$h, fuente: ${tag%%-*})…"
     # setsar=1: los originales declaran un pel aspect ratio erróneo (178:163); son 4:3 con píxeles cuadrados
     vf="setsar=1,scale=$w:$h:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos"
     vf+=",pad=$w:$h:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
     rm -f "$STAMP"
     for f in "${!SHA[@]}"; do
-        ffmpeg -nostdin -v error -y -i "$O/$f" -vf "$vf" \
-            -c:v mpeg1video -q:v 3 -maxrate 15M -bufsize 4M -g 12 -bf 2 \
+        ffmpeg -nostdin -v error -y -i "$(src_of "$f")" -map 0:v:0 -map 0:a:0 -vf "$vf" \
+            -c:v mpeg1video -q:v "$q" -maxrate "$rate" -bufsize 8M -g 12 -bf 2 \
             -c:a copy -f mpeg "$V/.$f.part" &
         pids+=($!)
     done
@@ -571,7 +585,7 @@ ensure() {
     for f in "${!SHA[@]}"; do [[ -s "$V/.$f.part" ]] || ok=0; done
     if ((!ok)); then restore; fail "ffmpeg falló; se restauraron los vídeos originales"; fi
     for f in "${!SHA[@]}"; do mv "$V/.$f.part" "$V/$f"; done
-    echo "$res v$FIT_VERSION" > "$STAMP"
+    echo "$res v$FIT_VERSION $tag" > "$STAMP"
     echo "videos-fit: listo ($res)"
 }
 
@@ -584,6 +598,67 @@ case "${1:-status}" in
 esac
 EOF
     chmod +x "$SC_ROOT/videos-fit.sh"
+}
+
+# Escalado con IA (opcional): genera el máster $SC_ROOT/videos-hd con tools/upscale-videos.py.
+# Necesita PyTorch + spandrel (y una GPU para que tarde minutos y no horas). Por defecto se PREGUNTA
+# (respuesta por defecto: no), solo si hay terminal, si hay PyTorch y si todavía no hay máster.
+# --videos-ai MODELO lo hace sin preguntar; --videos-ai off no pregunta.
+# Python: SC_PYTHON, o el entorno $AI_VENV (lo crea este instalador), o python3. Si python3 tiene PyTorch
+# pero no spandrel, se crea $AI_VENV (reutiliza el PyTorch del sistema) y se instala spandrel ahí.
+AI_VENV="${XDG_DATA_HOME:-$HOME/.local/share}/spaceclash-venv"
+ai_ready() { "$1" -c 'import torch, spandrel, numpy' 2>/dev/null; }
+find_ai_python() {   # imprime el primer Python listo para el escalado
+    local py
+    for py in ${SC_PYTHON:+"$SC_PYTHON"} "$AI_VENV/bin/python" python3; do
+        have "$py" && ai_ready "$py" && { echo "$py"; return 0; }
+    done
+    return 1
+}
+make_ai_venv() {     # python3 con PyTorch → entorno con spandrel
+    log "Creando $AI_VENV con spandrel (reutiliza el PyTorch de python3)…"
+    python3 -m venv --system-site-packages "$AI_VENV" && "$AI_VENV/bin/pip" install -q spandrel \
+        && ai_ready "$AI_VENV/bin/python"
+}
+setup_videos_ai() {
+    local tool="$SCRIPT_DIR/tools/upscale-videos.py" model=$SC_VIDEOS_AI a py="" need_venv=0
+    [[ "$model" == off ]] && return
+    [[ "$model" =~ ^(ask|general|general-sharp|x4plus)$ ]] \
+        || die "SC_VIDEOS_AI inválido: $model (ask|off|general|general-sharp|x4plus)"
+    [[ "$SC_DISPLAY" == scaled && "$SC_VIDEOS" == fit && -f "$tool" ]] || return
+    [[ "$model" == ask && -f "$SC_ROOT/videos-hd/manifest.json" ]] && return   # ya hecho: videos-fit lo usa solo
+    [[ "$model" == ask && ! -t 0 ]] && return
+    if ! py=$(find_ai_python); then
+        if have python3 && python3 -c 'import torch, numpy' 2>/dev/null; then
+            need_venv=1
+        elif [[ "$model" == ask ]]; then
+            echo "    Opcional: los vídeos se pueden escalar con IA (más nítidos). Requiere PyTorch:"
+            echo "    pip install torch (ver https://pytorch.org) y volver a instalar. Detalle: README.md"
+            return
+        else
+            warn "Para --videos-ai hace falta Python con PyTorch (ver https://pytorch.org). Se usan los vídeos normales."
+            return
+        fi
+    fi
+    if [[ "$model" == ask ]]; then
+        echo "    Los vídeos (logos, intro y finales) se pueden escalar con IA: más nítidos y sin bloques."
+        echo "    Tarda ≈10 min con una GPU NVIDIA (horas sin GPU) y se hace una sola vez."
+        read -r -p "    ¿Escalar los vídeos con IA ahora? [s/N] " a || a=""
+        [[ "$a" =~ ^[sSyY]$ ]] || { echo "    Sin escalar (se puede hacer después: ver README.md)"; return; }
+        model=general
+    fi
+    if ((need_venv)); then
+        make_ai_venv || { warn "No se pudo instalar spandrel en $AI_VENV: se usan los vídeos normales."; return; }
+        py="$AI_VENV/bin/python"
+    fi
+    "$py" -c 'import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)' 2>/dev/null \
+        || warn "PyTorch no ve una GPU CUDA: el escalado en CPU puede tardar horas."
+    log "Escalando los vídeos con IA (modelo $model; ≈10 min con GPU, una sola vez)…"
+    if "$py" "$tool" --root "$SC_ROOT" --model "$model"; then
+        ok "Máster de vídeo escalado con IA en $SC_ROOT/videos-hd"
+    else
+        warn "Falló el escalado con IA: se usan los vídeos normales (detalle arriba)."
+    fi
 }
 
 setup_videos() {
@@ -606,6 +681,7 @@ setup_videos() {
     fi
     [[ "${FORCE:-0}" == 1 ]] && rm -f "$CD_DIR/VIDEOS/.fit"
     log "Adaptando los vídeos a $res (4:3 centrado con barras negras; ~1 min)…"
+    [[ -f "$SC_ROOT/videos-hd/manifest.json" ]] && log "Se usa el máster escalado con IA de $SC_ROOT/videos-hd"
     if "$helper" ensure "$res" >/dev/null; then ok "Vídeos adaptados a $res (originales en $CD_DIR/VIDEOS/ORIG)"
     else warn "No se pudieron adaptar los vídeos: se usan los originales (estirados)."; fi
 }
@@ -644,6 +720,22 @@ if [[ "\$SC_DISPLAY" == scaled && "\$SC_VIDEOS" == fit && -x "$SC_ROOT/videos-fi
     command -v notify-send >/dev/null && notify-send -a 'Space Clash' 'Space Clash' "Adaptando los vídeos a \$SC_VDESKTOP_RES…"
     "$SC_ROOT/videos-fit.sh" ensure "\$SC_VDESKTOP_RES" >>"$LOG_DIR/wine.log" 2>&1
 fi
+# --sin-videos: directo al menú principal. La unidad del CD apunta a una vista con enlaces simbólicos
+# que no tiene LOGO, DINAMIC ni INTRO (el juego omite los vídeos que no existen); los finales siguen.
+# Al salir vuelve al CD completo, y el arranque normal también lo restablece.
+NOVID=0
+[[ "\${1:-}" == --sin-videos ]] && { NOVID=1; shift; }
+CD_LINK="$WINEPREFIX/dosdevices/${SC_CD_LETTER,,}:"
+if ((NOVID)); then
+    rm -rf "$NOVID_DIR" && mkdir -p "$NOVID_DIR/VIDEOS" || exit 1
+    for e in "$CD_DIR"/* "$CD_DIR"/.windows-*; do
+        [[ -e "\$e" && "\${e##*/}" != VIDEOS ]] && ln -s "\$e" "$NOVID_DIR/"
+    done
+    for e in "$CD_DIR"/VIDEOS/FINAL*.MPG; do [[ -e "\$e" ]] && ln -s "\$e" "$NOVID_DIR/VIDEOS/"; done
+    ln -sfn "$NOVID_DIR" "\$CD_LINK"
+else
+    ln -sfn "$CD_DIR" "\$CD_LINK"
+fi
 cd "$GAME_DIR" || exit 1
 # SC.EXE detecta el CD virtual, escribe CDSC.INS y lanza CLASH.EXE.
 # Ruta completa obligatoria: dentro de explorer, "SC.EXE" a secas resuelve al
@@ -659,8 +751,15 @@ cmd+=('C:\SCLASH\SC.EXE' "\$@")
 if [[ "\$SC_GAMESCOPE" == 1 ]] && command -v gamescope >/dev/null; then
     cmd=(gamescope -w 640 -h 480 -f -S fit -- "\${cmd[@]}")
 fi
-echo "=== \$(date '+%F %T') \${cmd[*]}" >>"$LOG_DIR/wine.log"
-exec "\${cmd[@]}" >>"$LOG_DIR/wine.log" 2>&1
+echo "=== \$(date '+%F %T') \${cmd[*]}\$( ((NOVID)) && echo ' (sin vídeos)')" >>"$LOG_DIR/wine.log"
+((NOVID)) || exec "\${cmd[@]}" >>"$LOG_DIR/wine.log" 2>&1
+"\${cmd[@]}" >>"$LOG_DIR/wine.log" 2>&1
+rc=\$?
+# Esperar a que terminen todos los procesos del prefijo (SC.EXE → CLASH.EXE → SPACE.EXE) y volver al CD completo
+ws="\${SC_WINE%wine}wineserver"; command -v "\$ws" >/dev/null || ws=wineserver
+"\$ws" -w
+ln -sfn "$CD_DIR" "\$CD_LINK"
+exit "\$rc"
 EOF
     chmod +x "$LAUNCHER"
 
@@ -681,8 +780,11 @@ Terminal=false
 Categories=Game;StrategyGame;
 StartupWMClass=sc.exe
 EOF
+        sed -e 's/^Name=.*/Name=Space Clash (sin vídeos)/' \
+            -e 's/^Comment=.*/Comment=Space Clash directo al menú principal, sin los vídeos de inicio/' \
+            -e "s|^Exec=.*|Exec=\"$LAUNCHER\" --sin-videos|" "$DESKTOP_FILE" > "$DESKTOP_FILE_NV"
         have update-desktop-database && update-desktop-database "$(dirname "$DESKTOP_FILE")" >/dev/null 2>&1 || true
-        ok "Acceso directo: $DESKTOP_FILE"
+        ok "Accesos directos: $DESKTOP_FILE (y «sin vídeos»: $DESKTOP_FILE_NV)"
     fi
 }
 
@@ -710,6 +812,7 @@ cmd_install() {
     apply_patches
     setup_ddraw
     set_game_res
+    setup_videos_ai
     setup_videos
     create_launcher
     echo
@@ -762,6 +865,8 @@ cmd_doctor() {
         else
             echo "    Vídeos: originales (se ven estirados a lo ancho; ver --videos)"
         fi
+        [[ -f "$SC_ROOT/videos-hd/manifest.json" ]] && \
+            echo "    Máster de vídeo escalado con IA: $SC_ROOT/videos-hd (tools/upscale-videos.py)"
         have ffmpeg || echo "    ffmpeg no instalado (necesario para adaptar los vídeos)"
     fi
     if [[ -f "$GAME_DIR/CDSC.INS" ]]; then echo "    CDSC.INS = $(cat "$GAME_DIR/CDSC.INS")"; fi
@@ -792,7 +897,7 @@ cmd_uninstall() {
         mkdir -p "$backup" && cp -p "${saves[@]}" "$backup/" || die "No pude copiar las partidas a $backup; no se borró nada."
         ok "Partidas copiadas a $backup (para recuperarlas, copialas a $GAME_DIR después de instalar)"
     fi
-    rm -rf "$SC_ROOT" "$DESKTOP_FILE" "$ICON_FILE"
+    rm -rf "$SC_ROOT" "$DESKTOP_FILE" "$DESKTOP_FILE_NV" "$ICON_FILE"
     ok "Desinstalado."
 }
 
@@ -834,6 +939,11 @@ Opciones (o variables de entorno equivalentes):
   --videos MODO       fit = vídeos 4:3 con barras a pantalla completa (requiere ffmpeg)
                       original = vídeos sin tocar (estirados en modo scaled)
                                                           (SC_VIDEOS, def: fit)
+  --videos-ai M       Escalado de los vídeos con IA (una vez; requiere Python con PyTorch y
+                      spandrel, ideal con GPU NVIDIA): ask|off|general|general-sharp|x4plus
+                      ask = preguntar al instalar (respuesta por defecto: no)
+                                                          (SC_VIDEOS_AI, def: ask)
+                      También: python3 tools/upscale-videos.py --root DIR (en cualquier momento)
   --no-desktop        No crear acceso directo .desktop    (SC_DESKTOP=0)
   --install-deps      Instala dependencias con pacman si faltan
   --skip-hash         No verificar SHA-256 de la imagen
@@ -864,6 +974,7 @@ while (($#)); do
         --gamescope)    SC_GAMESCOPE=1 ;;
         --full)         SC_FULL=1 ;;
         --videos)       SC_VIDEOS=$2; shift ;;
+        --videos-ai)    SC_VIDEOS_AI=$2; shift ;;
         --no-desktop)   SC_DESKTOP=0 ;;
         --install-deps) INSTALL_DEPS=1 ;;
         --skip-hash)    SKIP_HASH=1 ;;
@@ -876,7 +987,7 @@ done
 # Recalcular rutas derivadas si cambió --root
 ISO_PATH="$SC_ROOT/media/SPACE_CLASH.iso"; CD_DIR="$SC_ROOT/cd"
 export WINEPREFIX="$SC_ROOT/prefix"; GAME_DIR="$WINEPREFIX/drive_c/SCLASH"
-LAUNCHER="$SC_ROOT/spaceclash.sh"; LOG_DIR="$SC_ROOT/logs"
+LAUNCHER="$SC_ROOT/spaceclash.sh"; LOG_DIR="$SC_ROOT/logs"; NOVID_DIR="$SC_ROOT/cd-sin-videos"
 
 case "$CMD" in
     install)   cmd_install ;;

@@ -29,3 +29,6 @@ desktop.ini
 
 # --- Documentación técnica interna (no se publica) ---
 docs/
+
+# --- Python ---
+__pycache__/

@@ -11,6 +11,8 @@
       Modo "Native": DirectDraw de Windows con capas de compatibilidad.
     - Opcional (-Videos Fit): vídeos 4:3 con barras negras a la resolución del monitor, para que no se
       vean estirados en modo Scaled (requiere ffmpeg; se descarga si no está). Ver docs/VIDEOS.md.
+    - Opcional: vídeos escalados con IA (tools\upscale-videos.py; se pregunta al instalar con -Videos Fit
+      si hay Python con PyTorch y spandrel).
     - Crea un lanzador (accesos directos en Escritorio y menú Inicio) que asigna una letra de
       unidad a la carpeta del CD con SUBST y ejecuta el juego.
     Documentación para usuarios: README.md.
@@ -54,6 +56,12 @@ param(
     # Original = vídeos sin tocar (en Scaled podrían verse estirados)
     [ValidateSet('Fit', 'Original')]
     [string]$Videos = 'Original',
+    # Escalado de los vídeos con IA (tools\upscale-videos.py; requiere Python con PyTorch y spandrel, ideal
+    # con GPU NVIDIA). Ask = preguntar al instalar con -Videos Fit (respuesta por defecto: no)
+    [ValidateSet('Ask', 'Off', 'General', 'GeneralSharp', 'X4plus')]
+    [string]$VideosAi = 'Ask',
+    # Python a usar para -VideosAi (por defecto: el lanzador py -3, o python.exe del PATH)
+    [string]$Python = '',
     [switch]$NoShortcut,
     [switch]$SkipHash,
     [switch]$SkipDirectPlay,
@@ -500,11 +508,13 @@ $VideoFitCode = @'
 #   -Mode ensure [-Res WxH]   los genera si hace falta (~1-2 min)
 #   -Mode restore             vuelve a los vídeos originales
 #   -Mode status
+# Si existe un máster escalado con IA (tools\upscale-videos.py → videos-hd\), se usa como fuente.
 param([ValidateSet('check', 'ensure', 'restore', 'status')][string]$Mode = 'status', [string]$Res = '')
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $V = Join-Path $Root 'CD\VIDEOS'; $O = Join-Path $V 'ORIG'; $Stamp = Join-Path $V '.fit'
-$FitVersion = 1   # subir si cambian los parámetros de codificación (fuerza regenerar)
+$Hd = Join-Path $Root 'videos-hd'
+$FitVersion = 2   # subir si cambian los parámetros de codificación (fuerza regenerar)
 $Sha = [ordered]@{
     'LOGO.MPG'    = '73b260e5f9c53d198d3872719b86c99d58059fa01224cce937bcd660af97306d'
     'DINAMIC.MPG' = '18d721c17d4f0f3cfab163ccf2255500427ce0ee9441ad97be632cdbe9d6e794'
@@ -537,8 +547,26 @@ function Find-Ffmpeg {
     return $null
 }
 
+# Fuente de cada vídeo: el máster HD si está completo, si no el original de 320x240
+function Test-Hd {
+    if (-not (Test-Path (Join-Path $Hd 'manifest.json'))) { return $false }
+    foreach ($f in $Sha.Keys) {
+        $m = Join-Path $Hd ([System.IO.Path]::ChangeExtension($f, '.mkv'))
+        if (-not (Test-Path $m) -or (Get-Item $m).Length -eq 0) { return $false }
+    }
+    return $true
+}
+function Get-SourceTag {
+    if (Test-Hd) { return 'hd-' + (Get-FileHash -Algorithm SHA256 (Join-Path $Hd 'manifest.json')).Hash.Substring(0, 12).ToLowerInvariant() }
+    return 'orig'
+}
+function Get-Source([string]$f) {
+    if (Test-Hd) { return Join-Path $Hd ([System.IO.Path]::ChangeExtension($f, '.mkv')) }
+    return Join-Path $O $f
+}
+
 function Test-Fit([string]$r) {
-    return (Test-Path $Stamp) -and ([System.IO.File]::ReadAllText($Stamp).Trim() -eq "$r v$FitVersion")
+    return (Test-Path $Stamp) -and ([System.IO.File]::ReadAllText($Stamp).Trim() -eq "$r v$FitVersion $(Get-SourceTag)")
 }
 
 function Backup-Originals {   # copia los originales a ORIG (una sola vez)
@@ -573,19 +601,22 @@ function Invoke-Ensure([string]$r) {
     if (Test-Fit $r) { return }
     $ff = Find-Ffmpeg
     if (-not $ff) { throw 'Falta ffmpeg; se usan los vídeos actuales.' }
-    # Más de 1080 líneas no aporta nada con una fuente de 320x240: en pantallas mayores se genera a
-    # 1080 de alto con la MISMA proporción y el renderizador lo estira sin deformar.
+    # Más de 1080 líneas no aporta nada (fuente de 320x240, o máster HD de 960): en pantallas mayores se
+    # genera a 1080 de alto con la MISMA proporción y el renderizador lo estira sin deformar.
     if ($h -gt 1080) { $w = [int][Math]::Floor(($w * 1080 / $h + 1) / 2) * 2; $h = 1080 }
     Backup-Originals
-    Write-Host "Generando los vídeos para $r (${w}x$h)…"
+    $tag = Get-SourceTag
+    $q = 3; $rate = '15M'
+    if ($tag -like 'hd-*') { $q = 2; $rate = '30M' }   # el máster tiene detalle real: más bitrate
+    Write-Host "Generando los vídeos para $r (${w}x$h, fuente: $($tag.Split('-')[0]))…"
     # setsar=1: los originales declaran un pel aspect ratio erróneo (178:163); son 4:3 con píxeles cuadrados
     $vf = "setsar=1,scale=${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos," +
           "pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
     Remove-Item -Force -ErrorAction SilentlyContinue $Stamp
     $procs = @()
     foreach ($f in $Sha.Keys) {
-        $ffArgs = "-nostdin -v error -y -i `"$(Join-Path $O $f)`" -vf `"$vf`" " +
-                '-c:v mpeg1video -q:v 3 -maxrate 15M -bufsize 4M -g 12 -bf 2 ' +
+        $ffArgs = "-nostdin -v error -y -i `"$(Get-Source $f)`" -map 0:v:0 -map 0:a:0 -vf `"$vf`" " +
+                "-c:v mpeg1video -q:v $q -maxrate $rate -bufsize 8M -g 12 -bf 2 " +
                 "-c:a copy -f mpeg `"$(Join-Path $V ".$f.part")`""
         $p = Start-Process -FilePath $ff -ArgumentList $ffArgs -WindowStyle Hidden -PassThru
         $null = $p.Handle   # sin esto, ExitCode queda vacío en Windows PowerShell
@@ -599,7 +630,7 @@ function Invoke-Ensure([string]$r) {
     }
     if (-not $ok) { Restore-Originals; throw 'ffmpeg falló; se restauraron los vídeos originales.' }
     foreach ($f in $Sha.Keys) { Move-Item -Force (Join-Path $V ".$f.part") (Join-Path $V $f) }
-    [System.IO.File]::WriteAllText($Stamp, "$r v$FitVersion")
+    [System.IO.File]::WriteAllText($Stamp, "$r v$FitVersion $tag")
     Write-Host "Vídeos listos ($r)."
 }
 
@@ -642,6 +673,53 @@ function Get-Ffmpeg {   # ffmpeg del PATH, o descarga de una versión fija con v
     return $true
 }
 
+function Find-Python {   # ruta de un Python con torch + spandrel, o $null
+    $cands = @()
+    if ($Python) { $cands += $Python }
+    if (Get-Command py.exe -ErrorAction SilentlyContinue) {
+        $exe = (& py.exe -3 -c 'import sys; print(sys.executable)' 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $exe) { $cands += "$exe".Trim() }
+    }
+    $c = Get-Command python.exe -ErrorAction SilentlyContinue
+    if ($c) { $cands += $c.Path }
+    foreach ($py in $cands) {
+        & $py -c 'import torch, spandrel, numpy' 2>$null
+        if ($LASTEXITCODE -eq 0) { return $py }
+    }
+    return $null
+}
+
+# Escalado con IA (opcional): genera el máster $InstallDir\videos-hd, que VideosFit.ps1 usa como fuente.
+function Invoke-VideosAi {
+    $tool = Join-Path $ScriptDir 'tools\upscale-videos.py'
+    if ($VideosAi -eq 'Off' -or -not (Test-Path $tool)) { return }
+    $model = @{ General = 'general'; GeneralSharp = 'general-sharp'; X4plus = 'x4plus' }[$VideosAi]
+    $py = Find-Python
+    if ($VideosAi -eq 'Ask') {
+        if (Test-Path (Join-Path $InstallDir 'videos-hd\manifest.json')) { return }   # ya hecho
+        if ([Console]::IsInputRedirected) { return }
+        if (-not $py) {
+            Write-Host '    Opcional: los vídeos se pueden escalar con IA (más nítidos). Requiere Python con PyTorch y'
+            Write-Host '    spandrel; ver tools\upscale-videos.py --help'
+            return
+        }
+        Write-Host '    Los vídeos (logos, intro y finales) se pueden escalar con IA: más nítidos y sin bloques.'
+        Write-Host '    Tarda ≈10 min con una GPU NVIDIA (horas sin GPU) y se hace una sola vez.'
+        if ((Read-Host '    ¿Escalar los vídeos con IA ahora? [s/N]') -notmatch '^[sSyY]') {
+            Write-Host '    Sin escalar (se puede hacer después con tools\upscale-videos.py)'
+            return
+        }
+        $model = 'general'
+    } elseif (-not $py) {
+        Write-Warn2 'Para -VideosAi hace falta Python con PyTorch y spandrel (pip install torch spandrel numpy). Se usan los vídeos normales.'
+        return
+    }
+    Write-Step "Escalando los vídeos con IA (modelo $model; ≈10 min con GPU, una sola vez)…"
+    & $py $tool --root $InstallDir --model $model
+    if ($LASTEXITCODE -eq 0) { Write-Ok "Máster de vídeo escalado con IA en $InstallDir\videos-hd" }
+    else { Write-Warn2 'Falló el escalado con IA: se usan los vídeos normales.' }
+}
+
 function Install-Videos {
     # UTF-8 con BOM: Windows PowerShell 5.1 lee los .ps1 sin BOM como ANSI
     [System.IO.File]::WriteAllText($VideoFit, $VideoFitCode, (New-Object System.Text.UTF8Encoding $true))
@@ -656,6 +734,7 @@ function Install-Videos {
         Remove-Item -Force $VideoFit
         return
     }
+    Invoke-VideosAi
     Write-Step 'Adaptando los vídeos a la resolución del monitor (4:3 centrado con barras negras; 1-2 min)…'
     & $VideoFit -Mode ensure
     if ($LASTEXITCODE -eq 0) { Write-Ok "Vídeos adaptados (originales en $CdDir\VIDEOS\ORIG)" }
@@ -672,18 +751,38 @@ function Install-Videos {
 #  se leen de esa letra.
 $LauncherCode = @'
 # Lanzador de Space Clash para Windows (generado por install-spaceclash.ps1)
+#   -SinVideos: directo al menú principal, sin los vídeos de inicio (logos e intro)
+param([switch]$SinVideos)
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Cd = Join-Path $Root 'CD'; $Game = Join-Path $Root 'SCLASH'
+$NoVid = Join-Path $Root 'CD-sin-videos'
 New-Item -ItemType Directory -Force -Path (Join-Path $Root 'logs') | Out-Null
 $Log = Join-Path $Root 'logs\launcher.log'
 function L($m) { Add-Content -Path $Log -Value ("{0:yyyy-MM-dd HH:mm:ss} {1}" -f (Get-Date), $m) }
+# Vista del CD sin LOGO, DINAMIC ni INTRO (el juego omite los vídeos que no existen). CLASH.EXE solo lee
+# \Musicas y \Videos de la letra del CD; UNCLASH.EXE es la marca que comprueba este lanzador. Enlaces duros
+# (sin administrador; sin junctions, que Remove-Item -Recurse de PowerShell 5.1 puede seguir) o copia.
+function Build-NoVideoView {
+    if (Test-Path $NoVid) { Remove-Item -Recurse -Force $NoVid }
+    $items = @(Get-Item (Join-Path $Cd 'UNCLASH.EXE')) +
+             @(Get-ChildItem -File (Join-Path $Cd 'MUSICAS')) +
+             @(Get-ChildItem -File (Join-Path $Cd 'VIDEOS') -Filter 'FINAL*.MPG')
+    foreach ($f in $items) {
+        $dst = Join-Path $NoVid $f.FullName.Substring($Cd.Length + 1)
+        New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+        try { New-Item -ItemType HardLink -Path $dst -Value $f.FullName -ErrorAction Stop | Out-Null }
+        catch { Copy-Item $f.FullName $dst }
+    }
+}
 try {
     if (Get-Process -Name CLASH, SPACE -ErrorAction SilentlyContinue) { throw 'El juego ya está en ejecución.' }
-    # ¿Ya hay una letra apuntando a la carpeta CD? (p.ej. de una ejecución anterior interrumpida)
+    $view = $Cd
+    if ($SinVideos) { Build-NoVideoView; $view = $NoVid }
+    # ¿Ya hay una letra apuntando a esa carpeta? (p.ej. de una ejecución anterior interrumpida)
     $letter = $null
     foreach ($line in (cmd /c subst)) {
-        if ($line -match '^([A-Z]):\\: => (.+)$' -and $Matches[2].TrimEnd('\') -ieq $Cd) { $letter = $Matches[1] }
+        if ($line -match '^([A-Z]):\\: => (.+)$' -and $Matches[2].TrimEnd('\') -ieq $view) { $letter = $Matches[1] }
     }
     $created = $false
     if (-not $letter) {
@@ -691,14 +790,14 @@ try {
         $letter = 'RQPONMLKJIHGFZYXWVU'.ToCharArray() | ForEach-Object { [string]$_ } |
                   Where-Object { $used -notcontains $_ } | Select-Object -First 1
         if (-not $letter) { throw 'No hay letras de unidad libres para el CD virtual.' }
-        cmd /c "subst ${letter}: `"$Cd`"" | Out-Null
-        if (-not (Test-Path "${letter}:\UNCLASH.EXE")) { throw "No se pudo asignar ${letter}: a $Cd" }
+        cmd /c "subst ${letter}: `"$view`"" | Out-Null
+        if (-not (Test-Path "${letter}:\UNCLASH.EXE")) { throw "No se pudo asignar ${letter}: a $view" }
         $created = $true
     }
     [System.IO.File]::WriteAllText((Join-Path $Game 'CDSC.INS'), "${letter}:\", [System.Text.Encoding]::ASCII)
     # Vídeos 4:3 con barras (-Videos Fit): regenerarlos si cambió la resolución del monitor (1-2 min)
     $fit = Join-Path $Root 'VideosFit.ps1'
-    if (Test-Path $fit) {
+    if ((Test-Path $fit) -and -not $SinVideos) {
         & $fit -Mode check
         if ($LASTEXITCODE -ne 0) {
             L 'Adaptando los vídeos a la resolución del monitor…'
@@ -710,7 +809,7 @@ try {
             finally { $tip.Dispose() }
         }
     }
-    L "CD en ${letter}: ; iniciando CLASH.EXE"
+    L "CD en ${letter}: ($view); iniciando CLASH.EXE"
     $p = Start-Process -FilePath (Join-Path $Game 'CLASH.EXE') -WorkingDirectory $Game -PassThru
     $p.WaitForExit()
     # CLASH.EXE espera a SPACE.EXE, pero por las dudas esperar a que no quede ninguno
@@ -741,8 +840,15 @@ function New-Launcher {
         $lnk.IconLocation = (Join-Path $GameDir 'ICON.ICO') + ',0'
         $lnk.Description = 'Space Clash: The Last Frontier'
         $lnk.Save()
+        $lnk = $shell.CreateShortcut((Join-Path $dir 'Space Clash (sin vídeos).lnk'))
+        $lnk.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Launcher`" -SinVideos"
+        $lnk.WorkingDirectory = $GameDir
+        $lnk.IconLocation = (Join-Path $GameDir 'ICON.ICO') + ',0'
+        $lnk.Description = 'Space Clash directo al menú principal, sin los vídeos de inicio'
+        $lnk.Save()
     }
-    Write-Ok 'Accesos directos en el Escritorio y en el menú Inicio (Space Clash)'
+    Write-Ok 'Accesos directos en el Escritorio y en el menú Inicio (Space Clash, y Space Clash (sin vídeos))'
 }
 
 # --------------------------------------------------------------------------- #
@@ -830,11 +936,13 @@ function Invoke-Uninstall {
     }
     if ($IsWin) {
         foreach ($line in (cmd /c subst)) {
-            if ($line -match '^([A-Z]):\\: => (.+)$' -and $Matches[2].TrimEnd('\') -ieq $CdDir) { cmd /c "subst $($Matches[1]): /d" | Out-Null }
+            if ($line -match '^([A-Z]):\\: => (.+)$' -and ($Matches[2].TrimEnd('\') -ieq $CdDir -or
+                $Matches[2].TrimEnd('\') -ieq (Join-Path $InstallDir 'CD-sin-videos'))) { cmd /c "subst $($Matches[1]): /d" | Out-Null }
         }
         Set-VmrMerit $false
         Set-CompatLayers $false
         Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Space Clash.lnk')
+        Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Space Clash (sin vídeos).lnk')
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Programs')) 'Space Clash')
     }
     Remove-Item -Recurse -Force $InstallDir

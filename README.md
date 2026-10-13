@@ -77,7 +77,10 @@ unzip, curl, ffmpeg y los plugins de GStreamer), pero solo se probó en CachyOS.
 
 ## Al jugar
 
-- **Un clic** salta cada vídeo de introducción.
+- **Un clic** salta cada vídeo de introducción. Para no verlos, usá el acceso directo
+  **"Space Clash (sin vídeos)"**: arranca directo en el menú principal (los vídeos finales de la campaña
+  se siguen viendo; en ese modo, *Introducción* del menú no hace nada). Desde la terminal:
+  `~/Games/space-clash/spaceclash.sh --sin-videos` (Linux).
 - En el menú principal, la tecla **Esc sale del juego**.
 - Las partidas se guardan dentro de la carpeta de instalación:
   - Linux: `~/Games/space-clash/prefix/drive_c/SCLASH/`
@@ -106,6 +109,31 @@ Recomendado: 1024×768, la resolución con la que queda una instalación nueva. 
 anterior que estaba en otra resolución, usá `--game-res 1024` (Windows: `-GameRes 1024`). En 4K, además,
 escalado entero (`--scaling integer` / `-Scaling Integer`). En Linux el renderer por defecto es `opengl`;
 los filtros no tienen efecto con `--renderer gdi`.
+
+## Vídeos en alta definición con IA (opcional)
+
+Los vídeos originales son de 320×240. Con una IA de escalado (Real-ESRGAN) quedan bastante más nítidos y
+sin los bloques del MPEG: logos, intro y finales. Se generan **en tu computadora, a partir de tu copia**
+del juego, y **una sola vez**: tardan unos 10 minutos con una placa NVIDIA (horas sin GPU) y ocupan
+~1,5 GB.
+
+Requisito: Python 3.10 o más nuevo con **PyTorch** (con CUDA para usar la GPU; ver
+[pytorch.org](https://pytorch.org)). Lo demás lo resuelve el instalador.
+
+- **Al instalar (Linux):** si hay PyTorch, el instalador pregunta si querés escalar los vídeos (por
+  defecto, no). Si respondés que sí, crea un entorno en `~/.local/share/spaceclash-venv` con lo que falta
+  (spandrel) y los escala.
+- **Al instalar (Windows):** pregunta solo si instalás con `-Videos Fit` y hay un Python con PyTorch y
+  spandrel (`pip install torch spandrel numpy`).
+- **En cualquier momento:** `~/.local/share/spaceclash-venv/bin/python tools/upscale-videos.py` (Linux,
+  una vez creado el entorno; otra carpeta: `--root DIR`) o
+  `py tools\upscale-videos.py --root %USERPROFILE%\Games\SpaceClash` (Windows). El juego usa los vídeos
+  nuevos cuando están los 7, la próxima vez que lo abras.
+- Modelos: `--model general` (por defecto, el más fiel), `general-sharp` (más nítido) o `x4plus` (texturas
+  más marcadas, ~12 veces más lento).
+- Sin preguntas (instalaciones automáticas): `--videos-ai general|off` (Windows: `-VideosAi General|Off`).
+
+Desinstalar borra también estos vídeos; se pueden volver a generar.
 
 ## Actualizar
 
@@ -179,6 +207,7 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 | Vídeos, menú, campaña planetaria y espacial | ✅ | ⏳ |
 | Pantalla completa escalada 4:3 | ✅ | ⏳ |
 | Vídeos a pantalla completa en 4:3 | ✅ | ⏳ (opcional, `-Videos Fit`) |
+| Vídeos escalados con IA (opcional) | ✅ | ⏳ |
 | Guardar/cargar | ✅ | ⏳ |
 | Multijugador LAN | ⏳ | ⏳ |
 
