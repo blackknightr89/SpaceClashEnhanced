@@ -121,7 +121,12 @@ en memoria, sin cambiar la lógica del juego:
 - **Cursor sin parpadeo:** con cnc-ddraw y Wine el cursor del original parpadeaba durante la partida.
 - **Sin espera en negro al cambiar de mapa:** al terminar una misión (o empezar la campaña espacial) la
   pantalla quedaba unos 6 segundos en negro antes del mapa estelar o la pantalla de ascenso; ahora pasa en
-  alrededor de un segundo.
+  alrededor de un segundo. Al ir del mapa estelar a una misión, el negro baja de unos 2,5 s a menos de 1 s.
+- **Autoguardado al empezar cada misión,** en la última ranura de la lista (aparece como "AUTO - …"). Si
+  ahí tenés una partida tuya, no la pisa.
+- **Grupos de selección:** Ctrl+0–9 guarda la selección y 0–9 la recupera (en la parte planetaria ya
+  existía; ahora también con las naves del mapa estelar). Pulsando dos veces el número, la cámara va al
+  grupo.
 - **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
   entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.
 

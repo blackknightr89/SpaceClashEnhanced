@@ -68,6 +68,14 @@ void cursor_init(void);
 void hud_init(int wide_w);
 int  hud_offset(int screen_w);
 
+/* autosave.c */
+void autosave_init(void);
+void autosave_poll(void);
+
+/* groups.c */
+void groups_init(void);
+int  groups_on_message(UINT msg, WPARAM wp, LPARAM lp);
+
 /* display.c */
 void display_init(void);
 

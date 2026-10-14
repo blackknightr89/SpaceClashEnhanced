@@ -10,8 +10,13 @@
  * (incluido ChangeDisplaySettingsA(NULL, 0), "volver al modo del registro", que es la llamada lenta al
  * arrancar SPACE.EXE), no hay nada que cambiar y se devuelve éxito sin difundir nada; si no, se llama a la
  * función real.
+ *
+ * Además, el original duerme 2 s fijos al cerrarse: SPACE.EXE en 0x40E98F (al pasar del mapa estelar a una
+ * misión o al menú, después de soltar los búferes de sonido) y CLASH.EXE en 0x415C3D (al salir del juego).
+ * Con la pantalla ya en negro, esa espera se ve entera. Se acorta el inmediato de "push 2000; call [Sleep]".
  */
 #include "scenh.h"
+#include <string.h>
 
 typedef LONG(WINAPI *cds_fn)(DEVMODEA *, DWORD);
 typedef BOOL(WINAPI *eds_fn)(LPCSTR, DWORD, DEVMODEA *);
@@ -52,8 +57,26 @@ static LONG WINAPI hk_ChangeDisplaySettingsA(DEVMODEA *dm, DWORD flags)
     return g_real_cds(dm, flags);
 }
 
+static void shorten_exit_sleep(void)
+{
+    uintptr_t at = g_game->kind == EXE_SPACE ? 0x40E98F : g_game->kind == EXE_CLASH ? 0x415C3D : 0;
+    int ms = cfg_int("pantalla", "espera_al_cerrar_ms", 100);
+    if (!at || ms < 0 || ms >= 2000)
+        return;
+    static const uint8_t push2000[5] = {0x68, 0xD0, 0x07, 0x00, 0x00};
+    uint8_t push[5] = {0x68};
+    uint32_t v = (uint32_t)ms;
+    memcpy(push + 1, &v, 4);
+    if (*(const uint16_t *)(at + 5) != 0x15FF) {   /* call dword ptr [Sleep] */
+        log_printf("RECHAZADO espera al cerrar: no hay un call a Sleep en 0x%08lx", (unsigned long)at);
+        return;
+    }
+    patch_bytes(at, push2000, push, sizeof push, "espera al cerrar (Sleep 2000 ms)");
+}
+
 void display_init(void)
 {
+    shorten_exit_sleep();
     if (!cfg_int("pantalla", "sin_cambio_de_modo_inutil", 1))
         return;
     HMODULE ddraw = GetModuleHandleA("ddraw.dll");

@@ -50,6 +50,7 @@ void cfg_set_int(const char *section, const char *key, int value)
 static LRESULT CALLBACK hk_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
     import_hooks_refresh();
+    groups_on_message(msg, wp, lp);
     if (speed_on_key(h, msg, wp) || zoom_on_message(msg, wp))
         return 0;
     lp = zoom_translate_mouse(msg, lp);   /* zoom por software: ratón al tamaño lógico */
@@ -108,6 +109,8 @@ static void init(void)
     zoom_init();
     speed_init();
     display_init();
+    autosave_init();
+    groups_init();
 }
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)

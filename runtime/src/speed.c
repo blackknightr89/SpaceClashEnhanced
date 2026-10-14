@@ -164,6 +164,7 @@ static void measure(void)
 BOOL WINAPI hk_PeekMessageA(LPMSG m, HWND h, UINT lo, UINT hi, UINT remove)
 {
     zoom_apply_pending();
+    autosave_poll();
     static int depth;   /* por si otro eslabón volviera a llamar por la IAT: ir directo a USER32 */
     BOOL r;
     if (depth) {
