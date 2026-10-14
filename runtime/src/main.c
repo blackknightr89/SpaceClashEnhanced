@@ -107,6 +107,7 @@ static void init(void)
     resolution_init();
     zoom_init();
     speed_init();
+    display_init();
 }
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)

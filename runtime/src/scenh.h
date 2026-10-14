@@ -40,6 +40,7 @@ void cfg_set_int(const char *section, const char *key, int value);
 int   patch_bytes(uintptr_t addr, const void *expected, const void *repl, size_t n, const char *what);
 int   patch_jmp(uintptr_t addr, const void *expected, size_t n, void *target, const char *what);
 void *hook_import(const char *dll, const char *func, void *replacement);
+void *hook_module_import(HMODULE mod, const char *dll, const char *func, void *replacement);
 typedef struct { const char *dll, *func; void *mine; void **slot; void *next; } ImportHook;
 int   import_hook_install(ImportHook *h);
 void  import_hooks_refresh(void);
@@ -66,6 +67,9 @@ void cursor_init(void);
 /* hud.c */
 void hud_init(int wide_w);
 int  hud_offset(int screen_w);
+
+/* display.c */
+void display_init(void);
 
 /* zoom.c */
 void zoom_init(void);

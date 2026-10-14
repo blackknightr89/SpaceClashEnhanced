@@ -119,6 +119,9 @@ en memoria, sin cambiar la lógica del juego:
   mantiene la proporción (1920×1080 → 1600×900 → 1280×720 → 1024×576); sin ella, 1024×768 → 800×600 →
   640×480. No actúa en pausa ni en multijugador.
 - **Cursor sin parpadeo:** con cnc-ddraw y Wine el cursor del original parpadeaba durante la partida.
+- **Sin espera en negro al cambiar de mapa:** al terminar una misión (o empezar la campaña espacial) la
+  pantalla quedaba unos 6 segundos en negro antes del mapa estelar o la pantalla de ascenso; ahora pasa en
+  alrededor de un segundo.
 - **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
   entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.
 

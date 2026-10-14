@@ -43,9 +43,9 @@ int patch_jmp(uintptr_t addr, const void *expected, size_t n, void *target, cons
     return patch_bytes(addr, expected, jmp, n, what);
 }
 
-static void **find_iat_slot(const char *dll, const char *func)
+static void **find_iat_slot_in(HMODULE mod, const char *dll, const char *func)
 {
-    uint8_t *base = (uint8_t *)GetModuleHandleA(NULL);
+    uint8_t *base = (uint8_t *)mod;
     IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
     IMAGE_DATA_DIRECTORY dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
     IMAGE_IMPORT_DESCRIPTOR *imp = (IMAGE_IMPORT_DESCRIPTOR *)(base + dir.VirtualAddress);
@@ -64,6 +64,11 @@ static void **find_iat_slot(const char *dll, const char *func)
         }
     }
     return NULL;
+}
+
+static void **find_iat_slot(const char *dll, const char *func)
+{
+    return find_iat_slot_in(GetModuleHandleA(NULL), dll, func);
 }
 
 /* Cambia la entrada de la IAT del EXE para dll!func. Devuelve la función original o NULL. */
@@ -121,4 +126,19 @@ void import_hooks_refresh(void)
         log_printf("import %s!%s reemplazado por otro módulo (0x%08lx): encadenado", h->dll, h->func,
                    (unsigned long)(uintptr_t)cur);
     }
+}
+
+/* Como hook_import, pero en la IAT de otro módulo cargado (p. ej. la ddraw.dll de cnc-ddraw). */
+void *hook_module_import(HMODULE mod, const char *dll, const char *func, void *replacement)
+{
+    void **slot = mod ? find_iat_slot_in(mod, dll, func) : NULL;
+    if (!slot) {
+        log_printf("RECHAZADO import %s!%s: el módulo no lo importa", dll, func);
+        return NULL;
+    }
+    void *orig = *slot;
+    if (!write_mem((uintptr_t)slot, &replacement, sizeof replacement))
+        return NULL;
+    log_printf("ok import %s!%s del módulo 0x%08lx", dll, func, (unsigned long)(uintptr_t)mod);
+    return orig;
 }
