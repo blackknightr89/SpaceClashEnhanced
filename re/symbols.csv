@@ -416,6 +416,9 @@ SPACE,0x412890,func,draw_fondo,void draw_fondo(void),named,copia view_h filas de
 SPACE,0x413050,func,game_logic_step,void game_logic_step(void),hypothesis,llamada una vez por tick desde frame_tick,
 SPACE,0x413540,func,draw_hud_panels,void draw_hud_panels(void),hypothesis,"ramas por 0x5C16E6 (x=0x270 modo>=2, x=0x30E modo 3), y = h-k",
 SPACE,0x4153B0,func,load_ship_sprites,,named,"sprintf .\spc\ni%02d%d.spc y .\spc\N%02d%d.spc; 4 variantes, bloques de 0xB000 B",
+SPACE,0x41AD00,func,minimap_follow_view,void minimap_follow_view(void),hypothesis,"desplaza 0x7A1864/66 de a 3 px para que el recuadro de la vista quede dentro del minimapa",
+SPACE,0x41AEB0,func,galaxy_scroll,void galaxy_scroll(int force),named,"bordes de pantalla (velocidad 0x467F62/64), arrastre en el minimapa (zona 4/5), límite [0x7A179C, 0x6980B4 - vista - 1]; paralaje 0x8170C4, fondo /8","con HUD; force=1 con la zona 4/5 centra la vista en el ratón (zoom.c la llama con zona 0)"
+SPACE,0x41B3B0,func,galaxy_scroll_nohud,void galaxy_scroll_nohud(void),named,"como 0x41AEB0 sin minimapa; siempre aplica límites y paralaje",llamada por set_screen_size con el HUD oculto (F9)
 SPACE,0x41BD80,func,check_promotion,int check_promotion(int won),named,"umbrales {1,3,5,7,9} planetas; rango++; show_rank_screen",
 SPACE,0x41C5D0,func,cursor_place,void cursor_place(void),named,mismo cuerpo que CLASH 0x42ABE0 con 0x8107C0,
 SPACE,0x41CBB0,func,frame_tick,void frame_tick(void),named,"timeGetTime en 0x41CBC1; cmp edx,0x25 en 0x41CBE0",punto de Q2: imm8 en 0x41CBE2
@@ -488,10 +491,14 @@ SPACE,0x69806C,data,g_hwnd,HWND,named,CreateWindowExA en app_main,
 SPACE,0x698078,data,g_sfx_volume,int32_t,named,"del .nfo (CLASH 0x72882C); 0x4203A0(1,v)",
 SPACE,0x69807C,data,g_is_demo,int,hypothesis,ESTO ES UNA DEMO...,
 SPACE,0x698080,data,g_rank,int8_t,named,primer byte de esp.sav; tambien recibe el code de planeta.nfo,
+SPACE,0x6980B4,data,g_galaxy_max_x,int16_t,named,límite derecho de la cámara (galaxy_scroll): cam <= máx − vista − 1; en el tutorial 1000,si la vista es más ancha la cámara queda en el mínimo
+SPACE,0x6980B8,data,g_galaxy_max_y,int16_t,named,ídem en y,
 SPACE,0x69A1E4,data,g_paused,int,named,WM_KEYDOWN VK_SPACE alterna,
+SPACE,0x69A200,data,g_space_palette,PALETTEENTRY[256],named,ddraw_set_palette en el mapa estelar (paleta.pcx),
 SPACE,0x69A620,data,g_msg,MSG,named,PeekMessage/GetMessage,
 SPACE,0x69A740,data,g_ships,ShipRec[4][150] (0x388 B),named,esp_sav_write,
 SPACE,0x724FE0,data,g_planets,PlanetRec[25] (0x1108 B),named,"esp_sav_write; +0x1C mapa, +0x2A nombre",
+SPACE,0x73F9C0,data,g_mouse_zone,uint8_t,named,"0x408460: 2 vista, 4 minimapa del HUD, 5 carta grande (botón 0x6E), 3 otro botón o ventana, 1 resto del HUD, 0 botones con el HUD oculto",
 SPACE,0x73F9C4,data,g_mouse_x,int,named,WM_MOUSEMOVE y GetCursorPos,
 SPACE,0x73F9C8,data,g_mouse_y,int,named,WM_MOUSEMOVE y GetCursorPos,
 SPACE,0x73F9CC,data,g_mouse_left,uint8_t,named,WM_LBUTTONDOWN/UP,
@@ -501,6 +508,8 @@ SPACE,0x73F9D8,data,g_in_game_hud,int32_t,hypothesis,del .nfo (CLASH 0x729DD8); 
 SPACE,0x773B20,data,g_starmap,"int16 w,h; int32 x2; cell[125][125] (12 B)",named,esp_sav_write fuerza 0x7D,
 SPACE,0x773B24,data,g_galaxy_cam_x,int32_t,named,clamp a límite-g_view_w-1 (SPACE.c l. 17762); guardada en s%d.sav/esp.sav,
 SPACE,0x773B28,data,g_galaxy_cam_y,int32_t,named,ídem con g_view_h,
+SPACE,0x7A179C,data,g_galaxy_min_x,int32_t,named,límite izquierdo de la cámara (galaxy_scroll),
+SPACE,0x7A17A0,data,g_galaxy_min_y,int32_t,named,límite superior de la cámara (galaxy_scroll),
 SPACE,0x7AAE90,data,g_backdrop_buf,uint8_t*,named,malloc(0xC0000) en 0x40E1AB; destino de m*.pcx en set_screen_size,
 SPACE,0x7AAE94,data,g_load_slot,int8_t (100 = ninguna),named,planeta.nfo code -2,
 SPACE,0x807180,data,g_view_w,int16_t,named,set_screen_size: = g_screen_w (0x420C49); clamp de la cámara galáctica,
@@ -516,5 +525,6 @@ SPACE,0x8170A0,data,g_prev_frame,uint8_t*,hypothesis,malloc(1024*768) en 0x40E1E
 SPACE,0x8170AC,data,g_galaxy_variant,uint8_t 0..3,named,rand()&3 en nueva campana; indice de 0x4555C0,
 SPACE,0x98A244,data,g_player_empire,int8_t,hypothesis,u8 del bloque común de los .nfo; índice de Nivel%02d/Prot%02d y uni%d.spc,alias: g_player
 SPACE,0x98A33C,data,g_music_volume,int32_t,named,"del .nfo (CLASH 0x8F1F98); 0x4203A0(0,v)",
+SPACE,0x98A344,data,g_space_modal,int32_t,hypothesis,"F8/F9 solo con 0; lo ponen las pantallas de victoria/derrota y de rango",zoom.c no cambia el zoom si vale ≠ 0
 SPACE,0x98A360,data,g_cursor_anims,Anim[37] (0x18 B),named,init desde 0x43C980 (12 B por entrada),
 SPACE,0x4316A0,range,CRT,end=0x43A7F0,library,desde los stubs de import (DirectDrawCreate) hasta el fin de .text: CRT estática de MSVC 5.0,

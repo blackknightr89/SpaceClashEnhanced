@@ -171,18 +171,22 @@ int resolution_max(int *w, int *h)
     return 1;
 }
 
-/* Cambia en caliente el tamaño lógico del modo 3 (para el zoom): los inmediatos de apply_mode_layout.
- * La tabla de modos queda en el máximo, así que las superficies de DirectDraw se crean siempre a ese
- * tamaño y el zoom escala por software (zoom.c). Solo CLASH (las dos primeras entradas de imms son las de
- * apply_mode_layout). */
+/* Cambia en caliente el tamaño lógico del modo 3 (para el zoom): los inmediatos de la maquetación
+ * (CLASH apply_mode_layout, SPACE set_screen_size: las dos primeras entradas de imms). La tabla de modos
+ * queda en el máximo, así que las superficies de DirectDraw se crean siempre a ese tamaño y el zoom escala
+ * por software (zoom.c). */
 int resolution_set_mode3(int w, int h)
 {
-    if (!g_max_w || !g_sites || g_sites->kind != EXE_CLASH || w > g_max_w || h > g_max_h || w < HUD_W)
+    if (!g_max_w || !g_sites || w > g_max_w || h > g_max_h || w < HUD_W)
         return 0;
-    uint16_t old_h = (uint16_t)g_h, new_h = (uint16_t)h, old_w = (uint16_t)g_w, new_w = (uint16_t)w;
-    if (!patch_bytes(g_sites->imms[0].at, &old_h, &new_h, 2, "zoom: alto del modo 3") ||
-        !patch_bytes(g_sites->imms[1].at, &old_w, &new_w, 2, "zoom: ancho del modo 3"))
-        return 0;
+    if (w == g_w && h == g_h)
+        return 1;
+    for (int i = 0; i < 2; i++) {
+        const Imm *m = &g_sites->imms[i];
+        uint16_t old = (uint16_t)(m->what == 0 ? g_w : g_h), v = (uint16_t)(m->what == 0 ? w : h);
+        if (!patch_bytes(m->at, &old, &v, 2, m->what == 0 ? "zoom: ancho del modo 3" : "zoom: alto del modo 3"))
+            return 0;
+    }
     g_w = w;
     g_h = h;
     return 1;

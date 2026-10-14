@@ -114,9 +114,10 @@ en memoria, sin cambiar la lógica del juego:
 - **Velocidad de juego:** **+** acelera y **−** frena (fila de números o teclado numérico): 50 %, 75 %,
   100 %, 150 %, 200 % y 300 %. Se ve un aviso arriba de la pantalla ("VELOCIDAD X2") y se recuerda para la
   próxima vez. Afecta a todo por igual (unidades, producción, reloj de misión). En multijugador queda fija.
-- **Zoom con la rueda del ratón** (parte planetaria): hacia adelante acerca y hacia atrás aleja, al
-  instante y sin pantalla negra. Con la pantalla panorámica mantiene la proporción (1920×1080 → 1600×900 →
-  1280×720 → 1024×576); sin ella, 1024×768 → 800×600 → 640×480. No actúa en pausa ni en multijugador.
+- **Zoom con la rueda del ratón** (parte planetaria y mapa estelar): hacia adelante acerca y hacia atrás
+  aleja, al instante y sin pantalla negra, sin mover el centro de la vista. Con la pantalla panorámica
+  mantiene la proporción (1920×1080 → 1600×900 → 1280×720 → 1024×576); sin ella, 1024×768 → 800×600 →
+  640×480. No actúa en pausa ni en multijugador.
 - **Cursor sin parpadeo:** con cnc-ddraw y Wine el cursor del original parpadeaba durante la partida.
 - **Menos CPU:** el original ocupaba un núcleo del procesador al 100 % todo el tiempo; ahora descansa
   entre fotogramas cuando sobra tiempo (útil en portátiles), sin cambiar el ritmo del juego.

@@ -1,4 +1,5 @@
-/* Z2: zoom en caliente con la rueda del ratón (parte planetaria, CLASH.EXE), sin pantalla negra.
+/* Z2/Z3: zoom en caliente con la rueda del ratón, sin pantalla negra: parte planetaria (CLASH.EXE) y mapa
+ * estelar (SPACE.EXE).
  *
  * Niveles: sin resolución panorámica, 1024×768 → 800×600 → 640×480 (los modos 3, 2 y 1 del juego). Con
  * resolución panorámica, tamaños con la misma proporción que la configurada, todos en el modo 3:
@@ -6,42 +7,73 @@
  *
  * Cambiar el modo de DirectDraw (SetDisplayMode) hace que cnc-ddraw y Wine reinicien la presentación y
  * la pantalla queda en negro unos instantes. Por eso el modo real queda siempre en el tamaño máximo y el
- * zoom es por software: el juego dibuja al tamaño lógico del nivel (apply_mode_layout con ese ancho/alto)
- * y sus Lock/Unlock (surface_lock 0x414C30, surface_unlock 0x414C80) se redirigen a búferes propios de
- * ese tamaño. Antes de cada Flip el back buffer se escala a la pantalla real ("nítido": copia o mezcla
- * al 50 % entre dos píxeles vecinos, con una tabla de 256×256 hecha con la paleta de la partida); el
- * cursor por software (0x41A5B0) se escala solo en su recuadro. El ratón se escala al revés (lParam de
- * los mensajes y GetCursorPos).
+ * zoom es por software: el juego dibuja al tamaño lógico del nivel (su maquetación con ese ancho/alto)
+ * y sus Lock/Unlock (surface_lock, surface_unlock) se redirigen a búferes propios de ese tamaño. Antes de
+ * cada Flip el back buffer se escala a la pantalla real ("nítido": copia o mezcla al 50 % entre dos
+ * píxeles vecinos, con una tabla de 256×256 hecha con la paleta de la partida); el cursor por software
+ * se escala solo en su recuadro. El ratón se escala al revés (lParam de los mensajes y GetCursorPos).
  *
  * La WndProc solo anota el pedido; el cambio se hace entre fotogramas, desde PeekMessage, si la simulación
- * está avanzando (no en menús ni en pausa) y no es multijugador.
+ * está avanzando (no en menús ni en pausa) y no es multijugador. Si el juego cambia de modo de verdad
+ * (ddraw_set_mode: pantallas de 640×480, siguiente misión), el modo 3 vuelve antes al tamaño máximo, para
+ * que la maquetación coincida con las superficies que se crean.
  */
 #include "scenh.h"
 #include <ddraw.h>
 #include <mmsystem.h>
 #include <string.h>
 
-#define G_VIDEO_MODE    ((volatile int16_t *)0x5C7E3C)
-#define G_CAM_X         ((volatile int32_t *)0x694FC4)
-#define G_CAM_Y         ((volatile int32_t *)0x694FC8)
-#define G_MAP_W         ((volatile int16_t *)0x694FC0)
-#define G_MAP_H         ((volatile int16_t *)0x694FC2)
-#define G_VIEW_W        ((volatile int16_t *)0x8BD522)
-#define G_VIEW_H        ((volatile int16_t *)0x8BE650)
-#define G_SCREEN_W      ((volatile int16_t *)0x8F1E60)
-#define G_SCREEN_H      ((volatile int16_t *)0x8F1E62)
-#define G_MOUSE_X       ((volatile int32_t *)0x729DC4)
-#define G_MOUSE_Y       ((volatile int32_t *)0x729DC8)
-#define G_TERRAIN_DIRTY ((volatile int32_t *)0x694FD4)
-#define G_HWND          (*(HWND *)0x7287F4)
-#define G_FRAMEBUF      (*(uint8_t **)0x493214)
-#define G_CURSOR_BG     (*(uint8_t **)0x8F1E70)   /* copia del cuadro sin cursor (fondo del cursor) */
-#define G_DDS_BACK      (*(IDirectDrawSurface **)0x483BA0)
-#define G_DDS_PRIMARY   (*(IDirectDrawSurface **)0x483BA8)
-#define G_DDRAW         (*(IDirectDraw **)0x483BA4)
-#define G_DDSD          ((DDSURFACEDESC *)0x481DA8)  /* la que usa surface_lock; lpSurface en 0x481DCC */
-#define GAME_PALETTE    ((PALETTEENTRY *)0x728880)
-#define CURSOR_UNLOCK_RET 0x41A73C                    /* retorno del Unlock del cursor por software */
+typedef struct {
+    ExeKind kind;
+    uintptr_t video_mode;                     /* int16: índice de modo (1–3) */
+    uintptr_t screen_w, screen_h, view_w, view_h;   /* int16 */
+    uintptr_t mouse_x, mouse_y;               /* int32 */
+    uintptr_t ddraw, ddsd, palette;           /* IDirectDraw*, DDSURFACEDESC de surface_lock, paleta */
+    uintptr_t lock, unlock, cursor_unlock_ret;   /* surface_lock/unlock; retorno del Unlock del cursor */
+    uintptr_t layout, set_target, set_clip, set_palette, set_mode;
+    uintptr_t busy;                           /* int32 != 0: pantalla modal (0 si no aplica) */
+} ZoomSites;
+
+static const ZoomSites SITES[] = {
+    {EXE_CLASH, 0x5C7E3C, 0x8F1E60, 0x8F1E62, 0x8BD522, 0x8BE650, 0x729DC4, 0x729DC8,
+     0x483BA4, 0x481DA8, 0x728880, 0x414C30, 0x414C80, 0x41A73C,
+     0x428A70, 0x446890, 0x446830, 0x414BD0, 0x414A50, 0},
+    {EXE_SPACE, 0x5C16E6, 0x817090, 0x817092, 0x807180, 0x807188, 0x73F9C4, 0x73F9C8,
+     0x468434, 0x467668, 0x69A200, 0x40D610, 0x40D660, 0x412554,
+     0x420B00, 0x430470, 0x430410, 0x40D5B0, 0x40D430, 0x98A344},
+};
+static const ZoomSites *S;
+
+#define I16(a) (*(volatile int16_t *)(a))
+#define I32(a) (*(volatile int32_t *)(a))
+#define G_VIDEO_MODE    I16(S->video_mode)
+#define G_SCREEN_W      I16(S->screen_w)
+#define G_SCREEN_H      I16(S->screen_h)
+#define G_VIEW_W        I16(S->view_w)
+#define G_VIEW_H        I16(S->view_h)
+#define G_DDS_BACK      (*(IDirectDrawSurface **)g_game->dds_back)
+#define G_DDS_PRIMARY   (*(IDirectDrawSurface **)g_game->dds_primary)
+#define G_DDRAW         (*(IDirectDraw **)S->ddraw)
+#define G_DDSD          ((DDSURFACEDESC *)S->ddsd)
+#define GAME_PALETTE    ((PALETTEENTRY *)S->palette)
+
+/* CLASH: cámara del mapa planetario y lo que usa clash_present_now */
+#define CL_CAM_X        I32(0x694FC4)
+#define CL_CAM_Y        I32(0x694FC8)
+#define CL_MAP_W        I16(0x694FC0)
+#define CL_MAP_H        I16(0x694FC2)
+#define CL_TERRAIN_DIRTY I32(0x694FD4)
+#define CL_FRAMEBUF     (*(uint8_t **)0x493214)
+#define CL_CURSOR_BG    (*(uint8_t **)0x8F1E70)   /* copia del cuadro sin cursor (fondo del cursor) */
+
+/* SPACE: cámara galáctica y su rutina de desplazamiento (límites, paralaje, minimapa) */
+#define SP_CAM_X        I32(0x773B24)
+#define SP_CAM_Y        I32(0x773B28)
+#define SP_HUD_SHOWN    I32(0x73F9D8)             /* F9 lo alterna */
+#define SP_MOUSE_ZONE   (*(volatile uint8_t *)0x73F9C0)   /* 4/5: ratón sobre el minimapa o la carta grande */
+#define SP_TICK_PENDING I32(0x467970)
+#define SP_SCROLL_HUD   0x41AEB0                  /* void (int forzar): con el HUD visible */
+#define SP_SCROLL_FULL  0x41B3B0                  /* void (void): sin HUD */
 
 typedef void(__cdecl *fn0)(void);
 typedef void(__cdecl *set_palette_fn)(void *pal);
@@ -82,7 +114,7 @@ static int scaling(void)
     if (!g_on)
         return 0;
     refresh_surface_size();
-    int w = *G_SCREEN_W, h = *G_SCREEN_H;
+    int w = G_SCREEN_W, h = G_SCREEN_H;
     return g_shadow_back && g_surf_w && (w < g_surf_w || h < g_surf_h) && w * h > 0 &&
            (size_t)w * h <= g_shadow_size;
 }
@@ -173,7 +205,7 @@ static int real_lock(IDirectDrawSurface *s, uint8_t **px, int *pitch)
 /* Escala src (tamaño lógico) a la superficie real, en el rectángulo de origen [lx0,lx1)×[ly0,ly1). */
 static void blit_scaled(IDirectDrawSurface *surf, const uint8_t *src, int lx0, int ly0, int lx1, int ly1)
 {
-    int sw = *G_SCREEN_W, sh = *G_SCREEN_H, dw = g_surf_w, dh = g_surf_h;
+    int sw = G_SCREEN_W, sh = G_SCREEN_H, dw = g_surf_w, dh = g_surf_h;
     uint8_t *px;
     int pitch;
     if (!surf || !real_lock(surf, &px, &pitch))
@@ -194,7 +226,11 @@ static void *__cdecl my_surface_lock(IDirectDrawSurface *s)
 {
     if (scaling() && (s == G_DDS_BACK || s == G_DDS_PRIMARY)) {
         void *p = s == G_DDS_BACK ? g_shadow_back : g_shadow_primary;
+        /* medidas lógicas: SPACE con P4 copia dwHeight × lPitch bytes a la superficie bloqueada */
         G_DDSD->lpSurface = p;
+        G_DDSD->dwWidth = (DWORD)G_SCREEN_W;
+        G_DDSD->dwHeight = (DWORD)G_SCREEN_H;
+        G_DDSD->lPitch = G_SCREEN_W;
         return p;
     }
     HRESULT hr = IDirectDrawSurface_Lock(s, NULL, G_DDSD, 0, NULL);   /* como el original */
@@ -207,16 +243,16 @@ static void __cdecl my_surface_unlock(IDirectDrawSurface *s)
 {
     if (scaling() && (s == G_DDS_BACK || s == G_DDS_PRIMARY)) {
         if (s == G_DDS_PRIMARY) {
-            if ((uintptr_t)__builtin_return_address(0) == CURSOR_UNLOCK_RET) {
+            if ((uintptr_t)__builtin_return_address(0) == S->cursor_unlock_ret) {
                 /* cursor por software: solo el recuadro de la posición anterior y la actual */
-                int mx = *G_MOUSE_X, my = *G_MOUSE_Y;
+                int mx = I32(S->mouse_x), my = I32(S->mouse_y);
                 int px = g_last_mx < 0 ? mx : g_last_mx, py = g_last_my < 0 ? my : g_last_my;
                 blit_scaled(s, g_shadow_primary, (mx < px ? mx : px) - 24, (my < py ? my : py) - 24,
                             (mx > px ? mx : px) + 24, (my > py ? my : py) + 24);
                 g_last_mx = mx;
                 g_last_my = my;
             } else {
-                blit_scaled(s, g_shadow_primary, 0, 0, *G_SCREEN_W, *G_SCREEN_H);
+                blit_scaled(s, g_shadow_primary, 0, 0, G_SCREEN_W, G_SCREEN_H);
             }
         }
         return;
@@ -231,8 +267,8 @@ void zoom_before_flip(void)
         return;
     if (!g_blend_ok)
         build_blend();
-    blit_scaled(G_DDS_BACK, g_shadow_back, 0, 0, *G_SCREEN_W, *G_SCREEN_H);
-    memcpy(g_shadow_primary, g_shadow_back, (size_t)*G_SCREEN_W * *G_SCREEN_H);   /* lo que quedará visible */
+    blit_scaled(G_DDS_BACK, g_shadow_back, 0, 0, G_SCREEN_W, G_SCREEN_H);
+    memcpy(g_shadow_primary, g_shadow_back, (size_t)G_SCREEN_W * G_SCREEN_H);   /* lo que quedará visible */
 }
 
 /* ---- ratón: de la pantalla real al tamaño lógico ---- */
@@ -240,8 +276,8 @@ static void to_logical(LONG *x, LONG *y)
 {
     if (!scaling())
         return;
-    *x = *x * *G_SCREEN_W / g_surf_w;
-    *y = *y * *G_SCREEN_H / g_surf_h;
+    *x = *x * G_SCREEN_W / g_surf_w;
+    *y = *y * G_SCREEN_H / g_surf_h;
 }
 
 LPARAM zoom_translate_mouse(UINT msg, LPARAM lp)
@@ -267,48 +303,86 @@ static BOOL WINAPI hk_GetCursorPos(LPPOINT p)
 static int simulation_running(void)
 {
     DWORD last = *(volatile DWORD *)g_game->last_tick_ms;
-    return !*(volatile int *)g_game->paused && timeGetTime() - last < 200 &&
-           *(volatile uint8_t *)g_game->game_mode != 4;
+    if (*(volatile int *)g_game->paused || timeGetTime() - last >= 200)
+        return 0;
+    if (g_game->game_mode && *(volatile uint8_t *)g_game->game_mode == 4)   /* multijugador */
+        return 0;
+    return !S->busy || !I32(S->busy);
 }
 
 static int current_level(void)
 {
     for (int i = 0; i < g_nlevels; i++)
-        if (g_levels[i].idx == *G_VIDEO_MODE && g_levels[i].w == *G_SCREEN_W && g_levels[i].h == *G_SCREEN_H)
+        if (g_levels[i].idx == G_VIDEO_MODE && g_levels[i].w == G_SCREEN_W && g_levels[i].h == G_SCREEN_H)
             return i;
     return -1;
 }
 
-static void clamp_camera(void)
+/* Centro de la vista en coordenadas del mapa */
+static void view_center(int *cx, int *cy)
 {
-    int max_x = *G_MAP_W * 40 - *G_VIEW_W - 1, max_y = *G_MAP_H * 40 - *G_VIEW_H - 1;
-    if (*G_CAM_X > max_x)
-        *G_CAM_X = max_x;
-    if (*G_CAM_Y > max_y)
-        *G_CAM_Y = max_y;
-    if (*G_CAM_X < 0)
-        *G_CAM_X = 0;
-    if (*G_CAM_Y < 0)
-        *G_CAM_Y = 0;
+    int x = S->kind == EXE_CLASH ? CL_CAM_X : SP_CAM_X, y = S->kind == EXE_CLASH ? CL_CAM_Y : SP_CAM_Y;
+    *cx = x + G_VIEW_W / 2;
+    *cy = y + G_VIEW_H / 2;
 }
 
-/* Lo mismo que el final de frame_tick: dibujar, copiar al back buffer y a la copia del cursor, Flip. */
-static void present_now(void)
+static void clash_clamp_camera(void)
+{
+    int max_x = CL_MAP_W * 40 - G_VIEW_W - 1, max_y = CL_MAP_H * 40 - G_VIEW_H - 1;
+    if (CL_CAM_X > max_x)
+        CL_CAM_X = max_x;
+    if (CL_CAM_Y > max_y)
+        CL_CAM_Y = max_y;
+    if (CL_CAM_X < 0)
+        CL_CAM_X = 0;
+    if (CL_CAM_Y < 0)
+        CL_CAM_Y = 0;
+}
+
+/* CLASH: lo mismo que el final de frame_tick: dibujar, copiar al back buffer y a la copia del cursor, Flip. */
+static void clash_present_now(void)
 {
     ((fn0)0x41DCB0)();                                   /* render_game_view */
-    size_t n = (size_t)*G_SCREEN_W * *G_SCREEN_H;
+    size_t n = (size_t)G_SCREEN_W * G_SCREEN_H;
     void *px = my_surface_lock(G_DDS_BACK);
     if (px) {
-        memcpy(px, G_FRAMEBUF, n);
-        memcpy(G_CURSOR_BG, G_FRAMEBUF, n);
+        memcpy(px, CL_FRAMEBUF, n);
+        memcpy(CL_CURSOR_BG, CL_FRAMEBUF, n);
         my_surface_unlock(G_DDS_BACK);
-        ((fn0)0x414C90)();                               /* surface_flip */
+        ((fn0)g_game->surface_flip)();
     }
 }
 
+/* Lleva la cámara al centro (cx, cy) con la vista nueva y presenta el fotograma. */
+static void recenter(int cx, int cy)
+{
+    if (S->kind == EXE_CLASH) {
+        CL_CAM_X = cx - G_VIEW_W / 2;
+        CL_CAM_Y = cy - G_VIEW_H / 2;
+        clash_clamp_camera();
+        CL_TERRAIN_DIRTY = 1;
+        clash_present_now();
+        return;
+    }
+    /* SPACE: la rutina de desplazamiento del juego limita la cámara a la galaxia y mueve el paralaje, el
+     * fondo y el recuadro del minimapa. Con el ratón sobre el minimapa o la carta grande (zona 4/5),
+     * forzarla centraría la vista en el ratón: se llama como si estuviera fuera. */
+    SP_CAM_X = cx - G_VIEW_W / 2;
+    SP_CAM_Y = cy - G_VIEW_H / 2;
+    if (SP_HUD_SHOWN) {
+        uint8_t zone = SP_MOUSE_ZONE;
+        SP_MOUSE_ZONE = 0;
+        ((void(__cdecl *)(int))SP_SCROLL_HUD)(1);
+        SP_MOUSE_ZONE = zone;
+    } else {
+        ((fn0)SP_SCROLL_FULL)();
+    }
+    SP_TICK_PENDING = 1;   /* el próximo frame_tick dibuja y presenta ya, sin esperar al reloj */
+}
+
 /* Respaldo: llevar las superficies reales al tamaño máximo sin destruir el objeto DirectDraw (como
- * set_video_mode 0x414A50, pero conservando IDirectDraw y la paleta 0x481E14). Solo hace falta si la
- * misión arrancó en un modo más chico; puede pasar por negro una vez. */
+ * ddraw_set_mode, pero conservando IDirectDraw y la paleta). Solo hace falta si la partida arrancó en un
+ * modo más chico; puede pasar por negro una vez. */
 static int grow_surfaces(int w, int h)
 {
     IDirectDraw *dd = G_DDRAW;
@@ -337,7 +411,7 @@ static int grow_surfaces(int w, int h)
     }
     G_DDS_PRIMARY = primary;
     G_DDS_BACK = back;
-    ((void(__cdecl *)(void *))0x414BD0)(GAME_PALETTE);   /* paleta en la primaria nueva */
+    ((void(__cdecl *)(void *))S->set_palette)(GAME_PALETTE);   /* paleta en la primaria nueva */
     log_printf("zoom: superficies ampliadas a %dx%d", w, h);
     return 1;
 }
@@ -347,7 +421,7 @@ static int change_level(const Level *lv)
 {
     refresh_surface_size();
     if (lv->w > g_surf_w || lv->h > g_surf_h) {
-        /* la misión arrancó en un modo más chico que el máximo: ampliar una vez las superficies */
+        /* la partida arrancó en un modo más chico que el máximo: ampliar una vez las superficies */
         log_printf("zoom: la pantalla mide %dx%d, menos que %dx%d", g_surf_w, g_surf_h, lv->w, lv->h);
         if (!grow_surfaces(g_levels[0].w, g_levels[0].h))
             return 0;
@@ -355,10 +429,10 @@ static int change_level(const Level *lv)
     }
     if (g_wide && !resolution_set_mode3(lv->w, lv->h))
         return 0;
-    *G_VIDEO_MODE = (int16_t)lv->idx;
-    ((fn0)0x428A70)();                                   /* apply_mode_layout: ancho/alto, vista, HUD */
-    ((void(__cdecl *)(int, int))0x446890)(lv->w, lv->h); /* tamaño del destino de los blits */
-    ((void(__cdecl *)(int, int, int, int))0x446830)(0, 0, lv->w - 1, lv->h - 1);   /* recorte */
+    G_VIDEO_MODE = (int16_t)lv->idx;
+    ((fn0)S->layout)();                                  /* maquetación: ancho/alto, vista, HUD */
+    ((void(__cdecl *)(int, int))S->set_target)(lv->w, lv->h);   /* tamaño del destino de los blits */
+    ((void(__cdecl *)(int, int, int, int))S->set_clip)(0, 0, lv->w - 1, lv->h - 1);   /* recorte */
     g_last_mx = g_last_my = -1;
     return 1;
 }
@@ -372,19 +446,45 @@ void zoom_apply_pending(void)
     int cur = current_level();
     if (!simulation_running() || target == cur || cur < 0)
         return;
-    int cx = *G_CAM_X + *G_VIEW_W / 2, cy = *G_CAM_Y + *G_VIEW_H / 2;   /* mantener el centro */
+    int cx, cy;
+    view_center(&cx, &cy);   /* mantener el centro */
     if (!change_level(&g_levels[target])) {
         log_printf("zoom: no se pudo pasar a %dx%d", g_levels[target].w, g_levels[target].h);
         return;
     }
-    *G_CAM_X = cx - *G_VIEW_W / 2;
-    *G_CAM_Y = cy - *G_VIEW_H / 2;
-    clamp_camera();
-    *G_TERRAIN_DIRTY = 1;
     char msg[32];
     wsprintfA(msg, "ZOOM %dX%d", g_levels[target].w, g_levels[target].h);
     osd_show(msg, 1200);
-    present_now();
+    recenter(cx, cy);
+}
+
+/* ddraw_set_mode: un cambio de modo real crea superficies con el tamaño de la tabla de modos; con la
+ * resolución panorámica el modo 3 vuelve antes al máximo para que la maquetación coincida. */
+typedef int(__cdecl *set_mode_fn)(int idx, HWND hwnd);
+static set_mode_fn g_set_mode_orig;
+
+static int __cdecl my_set_mode(int idx, HWND hwnd)
+{
+    if (g_wide)
+        resolution_set_mode3(g_levels[0].w, g_levels[0].h);
+    return g_set_mode_orig(idx, hwnd);
+}
+
+static void hook_set_mode(void)
+{
+    /* sub esp,0x404; push esi; push edi: 8 bytes que se copian tal cual a la trampa */
+    static const uint8_t head[] = {0x81, 0xEC, 0x04, 0x04, 0x00, 0x00, 0x56, 0x57};
+    uint8_t *t = VirtualAlloc(NULL, 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!t || memcmp((void *)S->set_mode, head, sizeof head)) {
+        log_printf("RECHAZADO zoom: ddraw_set_mode no coincide");
+        return;
+    }
+    memcpy(t, head, sizeof head);
+    t[8] = 0xE9;
+    int32_t rel = (int32_t)((S->set_mode + sizeof head) - ((uintptr_t)t + 13));
+    memcpy(t + 9, &rel, 4);
+    g_set_mode_orig = (set_mode_fn)t;
+    patch_jmp(S->set_mode, head, sizeof head, (void *)my_set_mode, "zoom: ddraw_set_mode");
 }
 
 /* Devuelve 1 si consumió el mensaje. Nivel 0 = el más lejano (más grande). */
@@ -403,12 +503,17 @@ int zoom_on_message(UINT msg, WPARAM wp)
 
 void zoom_init(void)
 {
-    if (g_game->kind != EXE_CLASH || !cfg_int("zoom", "activar", 1))
+    if (!cfg_int("zoom", "activar", 1))
+        return;
+    for (size_t i = 0; i < sizeof SITES / sizeof *SITES; i++)
+        if (SITES[i].kind == g_game->kind)
+            S = &SITES[i];
+    if (!S)
         return;
     static const uint8_t lock_head[] = {0x56, 0x8B, 0x74, 0x24, 0x08, 0x6A, 0x00, 0x6A, 0x00};
     static const uint8_t unlock_head[] = {0x8B, 0x44, 0x24, 0x04, 0x6A, 0x00, 0x50, 0x8B, 0x08};
-    if (memcmp((void *)0x414C30, lock_head, sizeof lock_head) ||
-        memcmp((void *)0x414C80, unlock_head, sizeof unlock_head)) {
+    if (memcmp((void *)S->lock, lock_head, sizeof lock_head) ||
+        memcmp((void *)S->unlock, unlock_head, sizeof unlock_head)) {
         log_printf("RECHAZADO zoom: surface_lock/surface_unlock no coinciden");
         return;
     }
@@ -439,8 +544,10 @@ void zoom_init(void)
         log_printf("RECHAZADO zoom: sin memoria para los búferes");
         return;
     }
-    patch_jmp(0x414C30, lock_head, sizeof lock_head, (void *)my_surface_lock, "zoom: surface_lock");
-    patch_jmp(0x414C80, unlock_head, sizeof unlock_head, (void *)my_surface_unlock, "zoom: surface_unlock");
+    patch_jmp(S->lock, lock_head, sizeof lock_head, (void *)my_surface_lock, "zoom: surface_lock");
+    patch_jmp(S->unlock, unlock_head, sizeof unlock_head, (void *)my_surface_unlock, "zoom: surface_unlock");
+    if (g_wide)
+        hook_set_mode();
     import_hook_install(&g_hk_cursor);
     g_on = 1;
     char buf[160] = "";

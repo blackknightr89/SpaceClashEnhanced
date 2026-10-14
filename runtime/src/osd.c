@@ -120,7 +120,7 @@ static void osd_flip(void)
 void osd_init(void)
 {
     g_avisos = cfg_int("general", "avisos", 1);
-    if (!g_avisos && !(g_game->kind == EXE_CLASH && cfg_int("zoom", "activar", 1)))
+    if (!g_avisos && !cfg_int("zoom", "activar", 1))
         return;   /* el Flip propio también lo necesita el zoom (zoom_before_flip) */
     /* mov eax,[primaria]; push 0; push 0 */
     uint8_t expected[9] = {0xA1, 0, 0, 0, 0, 0x6A, 0x00, 0x6A, 0x00};
