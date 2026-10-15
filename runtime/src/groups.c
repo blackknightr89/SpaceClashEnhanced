@@ -1,4 +1,4 @@
-/* Q3: grupos de selección (CLASH.EXE y SPACE.EXE).
+/* Q3: grupos de selección y Q4: desplazamiento con las flechas (CLASH.EXE y SPACE.EXE).
  *
  * Parte planetaria (CLASH):
  * El original ya tiene grupos: Ctrl+0–9 guarda la selección en g_select_groups (0x8DB540, [10][150]) y el
@@ -18,6 +18,16 @@
  * La cámara (0x773B24/28) se mueve justo antes de galaxy_scroll (0x41AEB0, llamada por fotograma en
  * 0x413200) y se la llama con force=1: aplica el límite y desplaza el fondo y las capas de paralaje
  * según el salto, como cualquier otro desplazamiento.
+ *
+ * Flechas: en el original solo mueven la selección en las listas de las ventanas; la cámara se mueve con
+ * los bordes de la pantalla (CLASH camera_scroll_update 0x419030, SPACE galaxy_scroll 0x41AEB0: ratón a
+ * menos de 5 px del borde → velocidad +4 por tick hasta 40). Con una flecha apretada, durante esa llamada
+ * se pone el ratón del juego en el borde que corresponde y luego se restaura: mismo desplazamiento, misma
+ * aceleración y mismos límites que con el ratón. El eje sin flecha queda en el centro de la vista. No con
+ * una ventana o diálogo abierto (ahí las flechas son del juego) ni con el botón derecho apretado
+ * (arrastre del minimapa). El estado de las flechas se lleva desde la WndProc (KEYDOWN/KEYUP; se suelta
+ * todo al perder el foco). En CLASH el ratón se cambia alrededor de camera_tick, que llama a
+ * camera_scroll_update a través del desvío de hud.c (0x42BCCC); en SPACE, justo antes de galaxy_scroll.
  */
 #include "scenh.h"
 
@@ -51,7 +61,21 @@
 #define SPACE_MODAL 0x98A344          /* pantallas de victoria, derrota o rango */
 #define SPACE_WINDOW 0x71EE30         /* ventana abierta (≠ 0) */
 
-static int g_on;
+/* ratón (int32), botón derecho (u8) y tamaño lógico de la pantalla (int16) */
+#define CL_MOUSE_X 0x729DC4
+#define CL_MOUSE_Y 0x729DC8
+#define CL_RBUTTON 0x729DCE
+#define CL_SCREEN_W 0x8F1E60
+#define CL_SCREEN_H 0x8F1E62
+#define SP_MOUSE_X 0x73F9C4
+#define SP_MOUSE_Y 0x73F9C8
+#define SP_RBUTTON 0x73F9CE
+#define SP_SCREEN_W 0x817090
+#define SP_SCREEN_H 0x817092
+
+static int g_on;          /* grupos */
+static int g_arrows_on;   /* flechas */
+static volatile int g_arrow[4];   /* izquierda, arriba, derecha, abajo (VK_LEFT..VK_DOWN) */
 static int g_last_digit = -1;
 static DWORD g_last_time;
 static volatile int g_center_pending;
@@ -82,8 +106,19 @@ static int space_group_key(int d, int ctrl)
     return 1;
 }
 
+static void arrows_on_message(UINT msg, WPARAM wp)
+{
+    if (msg == WM_KILLFOCUS || (msg == WM_ACTIVATEAPP && !wp)) {
+        g_arrow[0] = g_arrow[1] = g_arrow[2] = g_arrow[3] = 0;
+    } else if ((msg == WM_KEYDOWN || msg == WM_KEYUP) && wp >= VK_LEFT && wp <= VK_DOWN) {
+        g_arrow[wp - VK_LEFT] = msg == WM_KEYDOWN;
+    }
+}
+
 int groups_on_message(UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (g_arrows_on)
+        arrows_on_message(msg, wp);
     if (!g_on || msg != WM_KEYDOWN || wp < '0' || wp > '9' || (lp & (1 << 30)))   /* sin autorrepetición */
         return 0;
     int ctrl = GetKeyState(VK_CONTROL) < 0;
@@ -102,6 +137,28 @@ int groups_on_message(UINT msg, WPARAM wp, LPARAM lp)
     return 0;   /* la tecla sigue hacia el juego (CLASH recupera el grupo; SPACE la ignora) */
 }
 
+/* Pone el ratón del juego en el borde que piden las flechas; devuelve 1 si lo cambió (guarda el valor). */
+static int arrows_push(uintptr_t mx, uintptr_t my, uintptr_t rbutton, uintptr_t sw, uintptr_t sh,
+                       int window_open, int32_t saved[2])
+{
+    int h = g_arrow[2] - g_arrow[0], v = g_arrow[3] - g_arrow[1];
+    if (!g_arrows_on || (!h && !v) || window_open || *(volatile uint8_t *)rbutton)
+        return 0;
+    int w = *(volatile int16_t *)sw, ht = *(volatile int16_t *)sh;
+    volatile int32_t *x = (volatile int32_t *)mx, *y = (volatile int32_t *)my;
+    saved[0] = *x;
+    saved[1] = *y;
+    *x = h < 0 ? 0 : h > 0 ? w - 1 : w / 2;
+    *y = v < 0 ? 0 : v > 0 ? ht - 1 : ht / 3;   /* sin flecha vertical: dentro de la vista, lejos del HUD */
+    return 1;
+}
+
+static void arrows_pop(uintptr_t mx, uintptr_t my, const int32_t saved[2])
+{
+    *(volatile int32_t *)mx = saved[0];
+    *(volatile int32_t *)my = saved[1];
+}
+
 static int clampi(int v, int lo, int hi)
 {
     return v < lo ? lo : v > hi ? hi : v;
@@ -109,8 +166,13 @@ static int clampi(int v, int lo, int hi)
 
 static void __cdecl hk_camera_tick(void)
 {
+    int32_t saved[2];
+    int pushed = arrows_push(CL_MOUSE_X, CL_MOUSE_Y, CL_RBUTTON, CL_SCREEN_W, CL_SCREEN_H,
+                             clash_dialog_open(), saved);
     ((void(__cdecl *)(void))CAMERA_TICK)();
-    if (!g_center_pending)
+    if (pushed)
+        arrows_pop(CL_MOUSE_X, CL_MOUSE_Y, saved);
+    if (!g_on || !g_center_pending)
         return;
     g_center_pending = 0;
     const uint8_t *u = (const uint8_t *)UNITS + (size_t)*(volatile uint8_t *)LOCAL_PLAYER * 150 * UNIT_SIZE;
@@ -138,7 +200,7 @@ static void __cdecl hk_camera_tick(void)
 
 static void __cdecl hk_galaxy_scroll(int force)
 {
-    if (g_center_pending) {
+    if (g_on && g_center_pending) {
         g_center_pending = 0;
         double sx = 0, sy = 0;
         int n = 0;
@@ -156,7 +218,12 @@ static void __cdecl hk_galaxy_scroll(int force)
             force = 1;
         }
     }
+    int32_t saved[2];
+    int window = *(volatile int32_t *)SPACE_WINDOW || *(volatile int32_t *)SPACE_MODAL;
+    int pushed = arrows_push(SP_MOUSE_X, SP_MOUSE_Y, SP_RBUTTON, SP_SCREEN_W, SP_SCREEN_H, window, saved);
     ((void(__cdecl *)(int))GALAXY_SCROLL)(force);
+    if (pushed)
+        arrows_pop(SP_MOUSE_X, SP_MOUSE_Y, saved);
 }
 
 static int hook_call(uintptr_t at, uintptr_t target, void *repl, const char *what)
@@ -173,12 +240,15 @@ static int hook_call(uintptr_t at, uintptr_t target, void *repl, const char *wha
 
 void groups_init(void)
 {
-    if (!cfg_int("grupos", "activar", 1))
+    int groups = cfg_int("grupos", "activar", 1), arrows = cfg_int("desplazamiento", "flechas", 1), ok = 0;
+    if (!groups && !arrows)
         return;
     if (g_game->kind == EXE_CLASH)
-        g_on = hook_call(CAMERA_TICK_CALL, CAMERA_TICK, (void *)hk_camera_tick,
-                         "grupos: doble pulsación centra la cámara");
+        ok = hook_call(CAMERA_TICK_CALL, CAMERA_TICK, (void *)hk_camera_tick,
+                       "grupos (centrado con doble pulsación) y cámara con las flechas");
     else if (g_game->kind == EXE_SPACE)
-        g_on = hook_call(GALAXY_SCROLL_CALL, GALAXY_SCROLL, (void *)hk_galaxy_scroll,
-                         "grupos de naves (Ctrl+0-9) y centrado con doble pulsación");
+        ok = hook_call(GALAXY_SCROLL_CALL, GALAXY_SCROLL, (void *)hk_galaxy_scroll,
+                       "grupos de naves (Ctrl+0-9, centrado) y cámara con las flechas");
+    g_on = ok && groups;
+    g_arrows_on = ok && arrows;
 }

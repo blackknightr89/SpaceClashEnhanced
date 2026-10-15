@@ -139,6 +139,9 @@ en memoria, sin cambiar la lógica del juego:
 - **Guardado y carga rápidos:** **F12** guarda y **Ctrl+F12** carga, en la parte planetaria y en el mapa
   estelar (también en pausa; no con una ventana abierta ni en multijugador). Usa la novena ranura de la
   lista (aparece como "RAPIDA - …") y tampoco pisa una partida tuya.
+- **Cámara con las flechas del teclado:** se mueve igual que con el ratón en el borde de la pantalla, en
+  la parte planetaria y en el mapa estelar (con una ventana abierta, las flechas siguen sirviendo para sus
+  listas).
 - **Grupos de selección:** Ctrl+0–9 guarda la selección y 0–9 la recupera (en la parte planetaria ya
   existía; ahora también con las naves del mapa estelar). Pulsando dos veces el número, la cámara va al
   grupo.
@@ -288,11 +291,11 @@ Ubuntu con escritorio.
 
 Lo que viene, en orden. Se actualiza con cada versión.
 
-Recién hecho (próxima versión): **guardado y carga rápidos** con F12 y Ctrl+F12. En **v1.8**: Ubuntu /
+Recién hecho (próxima versión): **guardado y carga rápidos** con F12 y Ctrl+F12, y la **cámara con las
+flechas** del teclado. En **v1.8**: Ubuntu /
 Debian y el instalador de Windows al día.
 
-1. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
-2. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
+1. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
    opcional: el instalador lo va a preguntar y se conservan los originales.
 
 Más adelante, sin fecha: los parches del juego aplicados en memoria (sin modificar los `.EXE`), música

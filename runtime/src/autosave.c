@@ -105,7 +105,7 @@ static void mark(const char *path, const char *prefix)
     fclose(f);
 }
 
-static int dialog_open(void)
+int clash_dialog_open(void)
 {
     for (size_t i = 0; i < sizeof DIALOGS / sizeof *DIALOGS; i++)
         if (*(volatile int16_t *)DIALOGS[i])
@@ -121,7 +121,7 @@ static int quick_allowed(void)
     if (!paused && !ticking)
         return 0;
     if (g_game->kind == EXE_CLASH)
-        return !*(volatile int *)MENU_FLAG && !dialog_open() && *(volatile uint8_t *)GAME_MODE != 4 &&
+        return !*(volatile int *)MENU_FLAG && !clash_dialog_open() && *(volatile uint8_t *)GAME_MODE != 4 &&
                *(volatile uint8_t *)MISSION_RESULT < 2;
     return !*(volatile int32_t *)SPACE_MODAL && !*(volatile int32_t *)SPACE_WINDOW;
 }
@@ -183,7 +183,7 @@ void autosave_poll(void)
         else
             quick_load();
     }
-    if (!g_due || (int)(timeGetTime() - g_due) < 0 || dialog_open())
+    if (!g_due || (int)(timeGetTime() - g_due) < 0 || clash_dialog_open())
         return;
     /* esperar a que la misión esté corriendo: sin pausa, sin resultado y con la simulación avanzando */
     DWORD tick = *(volatile DWORD *)g_game->last_tick_ms;
