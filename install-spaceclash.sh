@@ -8,6 +8,7 @@
 #
 #  Uso rápido:
 #     ./install-spaceclash.sh install            # instala todo
+#     ./install-spaceclash.sh reinstall          # reinstalación completa (vuelve a detectar el monitor)
 #     ./install-spaceclash.sh run                # ejecuta el juego
 #     ./install-spaceclash.sh doctor             # diagnóstico
 #     ./install-spaceclash.sh uninstall          # elimina la instalación
@@ -494,8 +495,8 @@ set_runtime_res() {   # --res WxH: modo 1024 del juego → WxH (scenh.ini [resol
     local ini="$GAME_DIR/scenh.ini" w h
     [[ -z "$SC_RES" ]] && return
     if [[ "$SC_RES" == auto ]]; then
-        # Solo en una instalación nueva (scenh.ini recién creado) y en pantalla completa escalada; al
-        # reinstalar se respeta lo que haya en scenh.ini.
+        # Solo en una instalación nueva o con reinstall (scenh.ini recién creado) y en pantalla completa
+        # escalada; al actualizar con install se respeta lo que haya en scenh.ini.
         [[ "${NEW_SCENH_INI:-0}" == 1 && "$SC_DISPLAY" == scaled ]] || return 0
         local mon fit
         mon=$(monitor_res)
@@ -546,6 +547,11 @@ setup_runtime() {
         return
     fi
     cp -f "$dll" "$GAME_DIR/scenh.dll"
+    # reinstall: scenh.ini de cero (con las opciones nuevas y la resolución del monitor detectada otra vez)
+    if [[ "${REINSTALL:-0}" == 1 && -f "$GAME_DIR/scenh.ini" ]]; then
+        mv -f "$GAME_DIR/scenh.ini" "$GAME_DIR/scenh.ini.anterior"
+        log "Opciones del runtime restablecidas (las anteriores quedan en scenh.ini.anterior)"
+    fi
     if [[ ! -f "$GAME_DIR/scenh.ini" ]]; then
         cp "$SCRIPT_DIR/runtime/scenh.ini" "$GAME_DIR/scenh.ini"
         NEW_SCENH_INI=1
@@ -614,6 +620,7 @@ setup_ddraw() {
         crt)     shader='Shaders\crt\crt-lottes-fast-no-warp-bilinear.glsl' ;;
         *) die "SC_FILTER inválido: $SC_FILTER (auto|nearest|sharp|smooth|xbr|crt)" ;;
     esac
+    [[ "${REINSTALL:-0}" == 1 ]] && rm -f "$cache"   # reinstall: descargar cnc-ddraw de nuevo
     [[ "$SC_RENDERER" == gdi && "$filter" != nearest ]] && warn "--filter $filter no tiene efecto con renderer=gdi (escalado simple por CPU)"
     if [[ ! -f "$cache" ]]; then
         mkdir -p "$(dirname "$cache")"
@@ -669,9 +676,9 @@ ini_set() {   # ini_set clave valor → fija "clave=valor" SOLO dentro de la sec
 set_game_res() {
     local cfg="$GAME_DIR/CLASH.CFG" idx
     local res=$SC_GAME_RES
-    # auto: 1024x768 (más mapa visible) solo si CLASH.CFG es nuevo; al reinstalar se respeta lo que el
-    # jugador eligió en Opciones.
-    [[ "$res" == auto ]] && { [[ "${NEW_CFG:-0}" == 1 ]] && res=1024 || res=keep; }
+    # auto: 1024x768 (más mapa visible) si CLASH.CFG es nuevo o con reinstall; al actualizar con install
+    # se respeta lo que el jugador eligió en Opciones.
+    [[ "$res" == auto ]] && { [[ "${NEW_CFG:-0}" == 1 || "${REINSTALL:-0}" == 1 ]] && res=1024 || res=keep; }
     case "$res" in
         keep) return 0 ;;
         640) idx=1 ;; 800) idx=2 ;; 1024) idx=3 ;;
@@ -856,14 +863,15 @@ setup_videos_ai() {
     fi
 }
 
-# --videos ask (por defecto): al reinstalar se conserva lo elegido (el lanzador lo guarda); en una
-# instalación nueva se pregunta (respuesta por defecto: sí). Sin terminal, vídeos originales.
+# --videos ask (por defecto): al actualizar con install se conserva lo elegido (el lanzador lo guarda); en
+# una instalación nueva o con reinstall se pregunta (respuesta por defecto: sí). Sin terminal, lo elegido
+# antes o, si no hay, vídeos originales.
 resolve_videos() {
     local a prev
     [[ "$SC_VIDEOS" =~ ^(ask|fit|original)$ ]] || die "SC_VIDEOS inválido: $SC_VIDEOS (ask|fit|original)"
     [[ "$SC_VIDEOS" == ask ]] || return 0
     prev=""
-    [[ -f "$LAUNCHER" ]] && prev=$(sed -n 's/^SC_VIDEOS="\${SC_VIDEOS:-\(fit\|original\)}"$/\1/p' "$LAUNCHER")
+    [[ -f "$LAUNCHER" ]] && ! [[ "${REINSTALL:-0}" == 1 && -t 0 ]] && prev=$(sed -n 's/^SC_VIDEOS="\${SC_VIDEOS:-\(fit\|original\)}"$/\1/p' "$LAUNCHER")
     if [[ -n "$prev" ]]; then
         SC_VIDEOS=$prev
     elif [[ "$SC_DISPLAY" != scaled ]]; then
@@ -1026,7 +1034,7 @@ cmd_install() {
     check_res
     resolve_videos
     check_deps
-    if [[ -f "$CD_DIR/UNCLASH.EXE" && "${FORCE:-0}" != 1 ]]; then
+    if [[ -f "$CD_DIR/UNCLASH.EXE" && ( "${FORCE:-0}" != 1 || "${KEEP_CD:-0}" == 1 ) ]]; then
         ok "CD ya extraído en $CD_DIR (no hace falta la imagen)"
     else
         verify_image
@@ -1049,6 +1057,21 @@ cmd_install() {
     echo "   o bien:     $0 run --root \"$SC_ROOT\""
     echo "   Logs:       $LOG_DIR/wine.log"
     echo "   Config gfx: $GAME_DIR/ddraw.ini"
+}
+
+# Reinstalación completa: todo lo de install --force (imagen, CD, prefijo, archivos, parches, runtime,
+# cnc-ddraw, vídeos) y además la configuración como en una instalación nueva: scenh.ini de cero con la
+# resolución del monitor detectada otra vez, el juego en 1024x768 y la pregunta de los vídeos. Se
+# conservan las partidas (*.sav, *.nfo), CLASH.CFG (salvo la resolución) y el máster de vídeo con IA.
+cmd_reinstall() {
+    [[ -d "$SC_ROOT" ]] || { log "No hay una instalación en $SC_ROOT: se hace una instalación nueva"; cmd_install; return; }
+    log "Reinstalación completa en $SC_ROOT (se conservan las partidas)"
+    FORCE=1; REINSTALL=1
+    if [[ -f "$CD_DIR/UNCLASH.EXE" ]] && ! (resolve_image) >/dev/null 2>&1; then
+        KEEP_CD=1
+        warn "No encontré la imagen del CD: se conserva el CD ya extraído en $CD_DIR"
+    fi
+    cmd_install
 }
 
 cmd_run() {
@@ -1149,7 +1172,11 @@ usage() {
 Uso: $0 <comando> [opciones]
 
 Comandos:
-  install      Verifica la imagen, la convierte a ISO, crea el prefijo y copia el juego
+  install      Verifica la imagen, la convierte a ISO, crea el prefijo y copia el juego. Sobre una
+               instalación existente la actualiza y conserva las opciones elegidas
+  reinstall    Reinstalación completa: rehace todo y vuelve a configurar como una instalación nueva
+               (detecta otra vez la resolución del monitor, scenh.ini de cero, pregunta por los vídeos).
+               Conserva las partidas; las opciones anteriores del runtime quedan en scenh.ini.anterior
   run          Ejecuta el juego
   doctor       Diagnostica la instalación
   uninstall    Borra todo lo instalado (pide confirmación; antes copia las partidas)
@@ -1176,7 +1203,8 @@ Opciones (o variables de entorno equivalentes):
   --no-patch          No aplicar el parche de compatibilidad (SC_PATCH=0)
   --res auto|WxH|off  Pantalla panorámica (experimental): la partida en WxH en lugar de 1024x768,
                       con más mapa visible; requiere el runtime. auto = la del monitor en una
-                      instalación nueva (al reinstalar se conserva); off = 4:3 original (SC_RES, def: auto)
+                      instalación nueva o con reinstall (install conserva la anterior);
+                      off = 4:3 original (SC_RES, def: auto)
   --no-runtime        Sin el runtime de mejoras scenh.dll (velocidad con +/-, menos CPU) (SC_RUNTIME=0)
   --no-vdesktop       Sin escritorio virtual de Wine      (SC_VDESKTOP=0)
   --vdesktop-res WxH  Tamaño del escritorio virtual       (SC_VDESKTOP_RES, def: auto)
@@ -1241,6 +1269,7 @@ LAUNCHER="$SC_ROOT/spaceclash.sh"; LOG_DIR="$SC_ROOT/logs"; NOVID_DIR="$SC_ROOT/
 
 case "$CMD" in
     install)   cmd_install ;;
+    reinstall) cmd_reinstall ;;
     run)       cmd_run "$@" ;;
     doctor)    cmd_doctor ;;
     uninstall) cmd_uninstall ;;

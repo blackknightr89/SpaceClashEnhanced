@@ -24,11 +24,16 @@
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -Display Native
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -GameRes 1024 -Scaling Integer   # 4K
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -Command doctor
+    # Reinstalación completa (o doble clic en reinstall-spaceclash.cmd): vuelve a detectar el monitor
+    powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -Command reinstall
     powershell -ExecutionPolicy Bypass -File .\install-spaceclash.ps1 -Command uninstall
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('install', 'run', 'doctor', 'uninstall')]
+    # install = instalar o actualizar (conserva las opciones elegidas) | reinstall = reinstalación completa:
+    # rehace todo y configura como una instalación nueva (detecta otra vez la resolución del monitor,
+    # scenh.ini de cero, pregunta por los vídeos); conserva las partidas
+    [ValidateSet('install', 'reinstall', 'run', 'doctor', 'uninstall')]
     [string]$Command = 'install',
     # Imagen del juego: .cue, .bin (MODE1/2352) o .iso. Por defecto: la primera que haya en .\disk
     [string]$Image = '',
@@ -67,7 +72,8 @@ param(
     # Sin el runtime de mejoras scenh.dll (velocidad con + y -, menos consumo de CPU, avisos en pantalla)
     [switch]$NoRuntime,
     # Pantalla panorámica (experimental): la partida en WxH en lugar de 1024x768, con más mapa visible
-    # (requiere el runtime). auto = la del monitor en una instalación nueva (al reinstalar se conserva);
+    # (requiere el runtime). auto = la del monitor en una instalación nueva o con -Command reinstall
+    # (install conserva la anterior);
     # off = 4:3 original; WxH = ese tamaño (p. ej. 1920x1080)
     [string]$Res = 'auto',
     [switch]$NoShortcut,
@@ -96,6 +102,7 @@ $FfmpegUrl    = 'https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ff
 $FfmpegSha256 = '60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba'
 $IsWin       = [System.Environment]::OSVersion.Platform -eq 'Win32NT'
 $NewCfg      = $false     # Install-GameFiles: CLASH.CFG recién copiado (instalación nueva)
+$Reinstall   = $false     # -Command reinstall: configurar como una instalación nueva
 
 # Parches (mismos que install-spaceclash.sh). Formato por archivo:
 #   File, Sha256 original, Sha256 final, lista de @(offset, bytes originales, bytes nuevos)
@@ -298,10 +305,12 @@ function Resolve-Image {
 }
 
 function Expand-GameImage {
-    if ((Test-Path (Join-Path $CdDir 'UNCLASH.EXE')) -and (Test-Path (Join-Path $CdDir 'MUSICAS'))) {
-        Write-Ok "CD ya extraído en $CdDir"; return
-    }
-    $img = Resolve-Image
+    $haveCd = (Test-Path (Join-Path $CdDir 'UNCLASH.EXE')) -and (Test-Path (Join-Path $CdDir 'MUSICAS'))
+    if ($haveCd -and -not $script:Reinstall) { Write-Ok "CD ya extraído en $CdDir"; return }
+    if ($haveCd) {   # reinstall: extraer de nuevo si está la imagen; si no, conservar el CD
+        try { $img = Resolve-Image }
+        catch { Write-Warn2 "No encontré la imagen del CD: se conserva el CD ya extraído en $CdDir"; return }
+    } else { $img = Resolve-Image }
     if (-not $SkipHash) {
         Write-Step 'Verificando SHA-256 de la imagen…'
         $h = Get-Sha256 $img
@@ -464,11 +473,17 @@ function Install-Runtime {
     }
     Copy-Item -Force $dll (Join-Path $GameDir 'scenh.dll')
     $ini = Join-Path $GameDir 'scenh.ini'
+    # reinstall: scenh.ini de cero (con las opciones nuevas y la resolución del monitor detectada otra vez)
+    if ($script:Reinstall -and (Test-Path $ini)) {
+        Move-Item -Force $ini (Join-Path $GameDir 'scenh.ini.anterior')
+        Write-Step 'Opciones del runtime restablecidas (las anteriores quedan en scenh.ini.anterior)'
+    }
     $newIni = -not (Test-Path $ini)
     if ($newIni) { Copy-Item (Join-Path $ScriptDir 'runtime\scenh.ini') $ini }
     if (-not (Set-ImportName 'SCENH.dll')) { Set-ImportName 'GDI32.dll' | Out-Null; return }
     if ($Res -eq 'auto') {
-        # Solo en una instalación nueva y en modo Scaled; al reinstalar se respeta lo que haya en scenh.ini
+        # Solo en una instalación nueva o con reinstall (scenh.ini recién creado) y en modo Scaled; al
+        # actualizar con install se respeta lo que haya en scenh.ini
         if (-not $newIni -or $Display -ne 'Scaled') { return }
         $mon = $null; try { $mon = Get-ScreenRes } catch { }
         $fit = $null
@@ -551,6 +566,7 @@ function Install-Display {
     }
     Write-Step 'Modo de pantalla: Scaled (cnc-ddraw, pantalla completa 4:3)…'
     $cache = Join-Path $InstallDir 'cnc-ddraw.zip'
+    if ($script:Reinstall) { Remove-Item -Force -ErrorAction SilentlyContinue $cache }   # descargarlo de nuevo
     if (-not (Test-Path $cache)) {
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         try { Invoke-WebRequest -UseBasicParsing -Uri $CncUrl -OutFile "$cache.part" }
@@ -600,7 +616,8 @@ function Install-Display {
 # Resolución del juego. CLASH.CFG (18 bytes): el byte 0x10 es el modo (1 = 640x480, 2 = 800x600, 3 = 1024x768).
 function Set-GameRes {
     $res = $GameRes
-    if ($res -eq 'Auto') { $res = if ($script:NewCfg) { '1024' } else { 'Keep' } }
+    # Auto: 1024 si CLASH.CFG es nuevo o con reinstall; al actualizar con install, lo elegido en Opciones
+    if ($res -eq 'Auto') { $res = if ($script:NewCfg -or $script:Reinstall) { '1024' } else { 'Keep' } }
     if ($res -eq 'Keep') { return }
     $cfg = Join-Path $GameDir 'CLASH.CFG'
     $b = [System.IO.File]::ReadAllBytes($cfg)
@@ -618,6 +635,26 @@ function Set-GameRes {
 #  .MPG a la resolución EXACTA del monitor con la imagen 4:3 centrada y barras negras (MPEG-1 System, el
 #  formato que el juego ya reproduce; audio copiado sin tocar). Originales en CD\VIDEOS\ORIG. El lanzador
 #  lo vuelve a ejecutar si cambia la resolución. Mismo procedimiento que videos-fit.sh (Linux).
+# Resolución del monitor: la usan el instalador (-Res auto) y VideosFit.ps1 (se inserta en su código, en
+# #<Get-ScreenRes>). Hasta la v1.8 solo estaba dentro de VideosFit.ps1, así que -Res auto nunca detectaba
+# el monitor en Windows.
+$ScreenResCode = @'
+function Get-ScreenRes {   # en píxeles físicos (sin el escalado de DPI de Windows)
+    if (-not ('ScDpi' -as [type])) {
+        Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public static class ScDpi {
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+}
+"@
+    }
+    [void][ScDpi]::SetProcessDPIAware()
+    return '{0}x{1}' -f [ScDpi]::GetSystemMetrics(0), [ScDpi]::GetSystemMetrics(1)
+}
+'@
+. ([scriptblock]::Create($ScreenResCode))
+
 $VideoFitCode = @'
 # VideosFit.ps1 — adapta los vídeos de Space Clash a la pantalla (generado por install-spaceclash.ps1)
 #   -Mode check  [-Res WxH]   ¿ya están generados? (código 0 = sí). Sin -Res: monitor principal
@@ -641,19 +678,7 @@ $Sha = [ordered]@{
     'FINAL03.MPG' = '13a2dd30aa8547d0560cc24fdc6ed87b3468310779c86146835cc2dabb8df983'
 }
 
-function Get-ScreenRes {   # en píxeles físicos (sin el escalado de DPI de Windows)
-    if (-not ('ScDpi' -as [type])) {
-        Add-Type -TypeDefinition @"
-using System.Runtime.InteropServices;
-public static class ScDpi {
-    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
-}
-"@
-    }
-    [void][ScDpi]::SetProcessDPIAware()
-    return '{0}x{1}' -f [ScDpi]::GetSystemMetrics(0), [ScDpi]::GetSystemMetrics(1)
-}
+#<Get-ScreenRes>
 
 function Find-Ffmpeg {
     $local = Join-Path $Root 'tools\ffmpeg.exe'
@@ -836,12 +861,13 @@ function Invoke-VideosAi {
     else { Write-Warn2 'Falló el escalado con IA: se usan los vídeos normales.' }
 }
 
-# -Videos Ask: al reinstalar, lo elegido (VideosFit.ps1 solo queda en la carpeta con los vídeos adaptados);
-# en una instalación nueva se pregunta. Sin consola interactiva, vídeos originales.
+# -Videos Ask: al actualizar con install, lo elegido (VideosFit.ps1 solo queda en la carpeta con los vídeos
+# adaptados); en una instalación nueva o con reinstall se pregunta. Sin consola interactiva, lo elegido
+# antes o, si no hay, vídeos originales.
 function Resolve-Videos {
     if ($Videos -ne 'Ask') { return }
     if ($Display -ne 'Scaled') { $script:Videos = 'Original'; return }
-    if (Test-Path $Launcher) {
+    if ((Test-Path $Launcher) -and -not ($script:Reinstall -and -not [Console]::IsInputRedirected)) {
         $script:Videos = $(if (Test-Path $VideoFit) { 'Fit' } else { 'Original' })
         return
     }
@@ -859,7 +885,7 @@ function Resolve-Videos {
 
 function Install-Videos {
     # UTF-8 con BOM: Windows PowerShell 5.1 lee los .ps1 sin BOM como ANSI
-    [System.IO.File]::WriteAllText($VideoFit, $VideoFitCode, (New-Object System.Text.UTF8Encoding $true))
+    [System.IO.File]::WriteAllText($VideoFit, $VideoFitCode.Replace('#<Get-ScreenRes>', $ScreenResCode), (New-Object System.Text.UTF8Encoding $true))
     if ($Display -ne 'Scaled' -or $Videos -ne 'Fit') {
         & $VideoFit -Mode restore
         Remove-Item -Force $VideoFit   # sin VideosFit.ps1 el lanzador no toca los vídeos
@@ -872,6 +898,7 @@ function Install-Videos {
         return
     }
     Invoke-VideosAi
+    if ($script:Reinstall) { Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $CdDir 'VIDEOS\.fit') }   # regenerarlos
     Write-Step 'Adaptando los vídeos a la resolución del monitor (4:3 centrado con barras negras; 1-2 min)…'
     & $VideoFit -Mode ensure
     if ($LASTEXITCODE -eq 0) { Write-Ok "Vídeos adaptados (originales en $CdDir\VIDEOS\ORIG)" }
@@ -1016,6 +1043,20 @@ function Invoke-Install {
     Write-Host "    Ajustes de pantalla: $GameDir\ddraw.ini (sección [ddraw])"
 }
 
+# Reinstalación completa: extrae el CD de nuevo (si está la imagen), recopia el juego, reaplica parches,
+# runtime, cnc-ddraw (descargado otra vez) y vídeos, y configura como una instalación nueva: scenh.ini de
+# cero con la resolución del monitor detectada otra vez, el juego en 1024x768 y la pregunta de los vídeos.
+# Se conservan las partidas (*.sav, *.nfo), CLASH.CFG (salvo la resolución) y el máster de vídeo con IA.
+function Invoke-Reinstall {
+    if (-not (Test-Path $InstallDir)) {
+        Write-Step "No hay una instalación en ${InstallDir}: se hace una instalación nueva"
+        Invoke-Install; return
+    }
+    Write-Step "Reinstalación completa en $InstallDir (se conservan las partidas)"
+    $script:Reinstall = $true
+    Invoke-Install
+}
+
 function Invoke-Doctor {
     $script:DoctorRc = 0
     function Report([string]$Name, [bool]$Ok) {
@@ -1115,6 +1156,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     try {
         switch ($Command) {
             'install'   { Invoke-Install }
+            'reinstall' { Invoke-Reinstall }
             'run'       { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Launcher }
             'doctor'    { Invoke-Doctor }
             'uninstall' { Invoke-Uninstall }

@@ -151,7 +151,8 @@ en memoria, sin cambiar la lógica del juego:
 - **Pantalla panorámica (experimental), activada por defecto:** la partida (planetaria y mapa estelar) a la
   resolución de tu monitor en lugar de 1024×768, con mucho más mapa a la vista. Se detecta al instalar de
   cero; en monitores más grandes que 2560 px de ancho (4K, ultrawide) se usa la mitad exacta para un
-  escalado nítido (3840×2160 → 1920×1080). Al reinstalar se conserva lo elegido. Para otro tamaño:
+  escalado nítido (3840×2160 → 1920×1080). Al actualizar se conserva lo elegido; para que vuelva a
+  detectar el monitor, usá la [reinstalación completa](#reinstalación-completa). Para otro tamaño:
   `--res 1600x900` (Linux) o `-Res 1600x900` (Windows); para el 4:3 original: `--res off` / `-Res off`.
   Los menús siguen en 640×480 y el HUD conserva su tamaño original, centrado abajo (`centrar_hud=0` en
   `scenh.ini` lo deja a la izquierda, como el original). El minimapa de la parte planetaria todavía no
@@ -215,6 +216,21 @@ Desinstalar borra también estos vídeos; se pueden volver a generar.
 **Tus partidas y opciones se conservan**, y no hace falta volver a copiar la imagen del CD: el juego ya
 instalado tiene su propia copia. Después podés borrar la carpeta descargada anterior.
 
+### Reinstalación completa
+
+Si la actualización no alcanza (por ejemplo, la partida no usa la resolución de tu monitor, cambiaste de
+monitor, o instalaste una versión vieja), hacé una reinstalación completa:
+
+- Windows: doble clic en **`reinstall-spaceclash.cmd`**
+- Linux: `bash reinstall-spaceclash.sh` (o `bash install-spaceclash.sh reinstall`)
+
+Rehace todo como en una instalación nueva: **vuelve a detectar la resolución del monitor**, deja el juego
+en 1024×768, vuelve a preguntar por los vídeos y descarga y aplica todo de nuevo. **Tus partidas se
+conservan.** Las opciones de las mejoras vuelven a sus valores por defecto; las anteriores quedan en
+`scenh.ini.anterior`, en la carpeta de las partidas. Si la imagen del CD está en `disk`, también se
+vuelve a extraer; si no, se usa la copia ya instalada. Acepta las mismas opciones que el instalador (p. ej.
+`reinstall-spaceclash.cmd -Res off`).
+
 ## Desinstalar
 
 - Windows: `install-spaceclash.cmd -Command uninstall`
@@ -247,6 +263,7 @@ restaurarla. Si no querés la copia: `--no-backup` (Linux) o `-NoBackup` (Window
    | Aviso de DirectPlay (Windows) | Aceptá instalarlo: el juego lo necesita |
    | El juego se cierra apenas arranca (Wine informa un error en `00414D6D`) | El juego necesita un dispositivo de sonido. Comprobá que el sonido de tu sistema funcione (PipeWire o PulseAudio) |
    | Ubuntu: *"Introduce el CD en la unidad"* o el juego no llega a abrirse | Actualizá a la última versión de este proyecto y volvé a ejecutar el instalador |
+   | La partida no usa la resolución del monitor (se ve en 1024×768 con barras) | [Reinstalación completa](#reinstalación-completa). En Windows, hasta la v1.8 el instalador no detectaba el monitor |
 
 3. Si no se resuelve, abrí un **issue** en este repositorio con la salida del diagnóstico y, si el juego
    se colgó, el informe de error. En Linux, Wine ofrece guardarlo como `backtrace.txt` en el Escritorio;
@@ -291,8 +308,10 @@ Ubuntu con escritorio.
 
 Lo que viene, en orden. Se actualiza con cada versión.
 
-Recién hecho (próxima versión): **guardado y carga rápidos** con F12 y Ctrl+F12, y la **cámara con las
-flechas** del teclado. En **v1.8**: Ubuntu /
+Recién hecho (próxima versión): **guardado y carga rápidos** con F12 y Ctrl+F12, la **cámara con las
+flechas** del teclado y la **reinstalación completa** (`reinstall-spaceclash.cmd` /
+`reinstall-spaceclash.sh`), que vuelve a detectar el monitor; en Windows se corrigió la detección de la
+resolución. En **v1.8**: Ubuntu /
 Debian y el instalador de Windows al día.
 
 1. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será

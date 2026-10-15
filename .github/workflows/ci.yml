@@ -17,10 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: shellcheck (install-spaceclash.sh)
+      - name: shellcheck (install-spaceclash.sh, reinstall-spaceclash.sh)
         run: |
-          bash -n install-spaceclash.sh
-          shellcheck -S warning install-spaceclash.sh
+          bash -n install-spaceclash.sh && bash -n reinstall-spaceclash.sh
+          shellcheck -S warning install-spaceclash.sh reinstall-spaceclash.sh
 
       - name: Compilar el runtime de mejoras (scenh.dll)
         run: |
@@ -56,8 +56,12 @@ jobs:
           git archive --format=tar --prefix=z/ HEAD | tar -x -C "$RUNNER_TEMP"
           z="$RUNNER_TEMP/z"
           # bash falla con CRLF; cmd.exe necesita CRLF; PowerShell 5.1 lee los acentos mal sin BOM
-          ! grep -q $'\r' "$z/install-spaceclash.sh" || { echo "install-spaceclash.sh tiene CRLF"; exit 1; }
-          grep -q $'\r$' "$z/install-spaceclash.cmd" || { echo "install-spaceclash.cmd no tiene CRLF"; exit 1; }
+          for f in install-spaceclash.sh reinstall-spaceclash.sh; do
+            ! grep -q $'\r' "$z/$f" || { echo "$f tiene CRLF"; exit 1; }
+          done
+          for f in install-spaceclash.cmd reinstall-spaceclash.cmd; do
+            grep -q $'\r$' "$z/$f" || { echo "$f no tiene CRLF"; exit 1; }
+          done
           grep -q $'\r$' "$z/install-spaceclash.ps1" || { echo "install-spaceclash.ps1 no tiene CRLF"; exit 1; }
           [[ "$(head -c3 "$z/install-spaceclash.ps1" | od -An -tx1 | tr -d ' ')" == efbbbf ]] \
             || { echo "install-spaceclash.ps1 sin BOM UTF-8"; exit 1; }
