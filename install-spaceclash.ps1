@@ -1025,14 +1025,25 @@ function Invoke-Doctor {
     Report 'CD extraído (UNCLASH.EXE, MUSICAS, VIDEOS)' ((Test-Path "$CdDir\UNCLASH.EXE") -and (Test-Path "$CdDir\MUSICAS\M0.WAV") -and (Test-Path "$CdDir\VIDEOS\INTRO.MPG"))
     Report 'Juego copiado (CLASH.EXE, SPACE.EXE, ANI\)' ((Test-Path "$GameDir\CLASH.EXE") -and (Test-Path "$GameDir\SPACE.EXE") -and (@(Get-ChildItem -ErrorAction SilentlyContinue "$GameDir\ANI").Count -gt 300))
     $rt = (Test-Path "$GameDir\scenh.dll") -and (Test-Path "$GameDir\CLASH.EXE") -and
-          ((Get-ImportName "$GameDir\CLASH.EXE" 0x806d4) -eq 'SCENH.dll')
+          ((Get-ImportName (Join-Path $GameDir 'CLASH.EXE') 0x806d4) -eq 'SCENH.dll')
     foreach ($p in $Patches) {
         $f = Join-Path $GameDir $p.File
         $final = $p.Final
         if ($rt) { $final = ($RuntimeImports | Where-Object { $_.File -eq $p.File }).Final }
         Report ("$($p.File) parcheado" + $(if ($rt) { ' (con runtime)' } else { '' })) ((Test-Path $f) -and ((Get-Sha256 $f) -eq $final))
     }
-    if ($rt) { Write-Ok "Runtime de mejoras activo (opciones en $GameDir\scenh.ini)" }
+    if ($rt) {
+        $logNote = $(if (Test-Path "$GameDir\scenh.log") { '; registro en scenh.log' } else { '' })
+        Write-Ok "Runtime de mejoras activo (opciones en $GameDir\scenh.ini$logNote)"
+        $sec = ''; $on = $false; $w = ''; $h = ''
+        foreach ($l in [System.IO.File]::ReadAllLines((Join-Path $GameDir 'scenh.ini'))) {
+            if ($l -match '^\[(.+)\]') { $sec = $Matches[1] }
+            elseif ($sec -eq 'resolucion' -and $l -match '^(activar|ancho|alto)=(\d+)') {
+                switch ($Matches[1]) { 'activar' { $on = ($Matches[2] -eq '1') } 'ancho' { $w = $Matches[2] } 'alto' { $h = $Matches[2] } }
+            }
+        }
+        if ($on) { Write-Host "    Resolución panorámica (experimental): ${w}x$h en lugar de 1024x768" }
+    }
     else { Write-Host '    Runtime de mejoras: no instalado' }
     Report 'Lanzador' (Test-Path $Launcher)
     if (Test-Path "$GameDir\ddraw.dll") {
@@ -1042,7 +1053,10 @@ function Invoke-Doctor {
         $stamp = Join-Path $CdDir 'VIDEOS\.fit'
         if (Test-Path $stamp) { Write-Ok "Vídeos adaptados a la pantalla ($([System.IO.File]::ReadAllText($stamp)))" }
         else { Write-Host '    Vídeos: originales (ver -Videos Fit)' }
-        $cfgPath = "$GameDir\CLASH.CFG"
+        if (Test-Path (Join-Path $InstallDir 'videos-hd\manifest.json')) {
+            Write-Host "    Máster de vídeo escalado con IA: $InstallDir\videos-hd (tools\upscale-videos.py)"
+        }
+        $cfgPath = Join-Path $GameDir 'CLASH.CFG'
         if (Test-Path $cfgPath) {
             $m = ([System.IO.File]::ReadAllBytes($cfgPath))[16]
             Write-Host ("    Resolución del juego: {0}" -f (@{ 0 = '640x400'; 1 = '640x480'; 2 = '800x600'; 3 = '1024x768' }[[int]$m]))

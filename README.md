@@ -59,6 +59,8 @@ el triple de área que a 1024×768.
    - Si Windows muestra *"Windows protegió su PC"*: **Más información → Ejecutar de todas formas**.
    - Si pregunta por **DirectPlay**, respondé que sí: el juego lo necesita. Windows pedirá permiso de
      administrador una sola vez.
+   - Pregunta si querés **adaptar los vídeos a 4:3** (Enter = sí; descarga ffmpeg, ≈110 MB, si no lo
+     tenés). Ver [Al jugar](#al-jugar).
 3. Al terminar aparece un acceso directo **"Space Clash"** en el Escritorio y en el menú Inicio.
 
 > Estado: el instalador de Windows fue probado en profundidad, pero **todavía no en un Windows real**.
@@ -283,13 +285,12 @@ Ubuntu con escritorio.
 
 Lo que viene, en orden. Se actualiza con cada versión.
 
-Recién hecho (próxima versión): **Ubuntu / Debian**, con instrucciones en este README.
+Recién hecho (próxima versión): **Ubuntu / Debian**, con instrucciones en este README, y el instalador de
+Windows al día con todo lo anterior.
 
-1. **Windows al día.** Revisar que el instalador de Windows tenga todo lo de las últimas versiones (se
-   sigue probando fuera de Windows hasta que alguien lo pruebe en un Windows real).
-2. **Guardado y carga rápidos con una tecla** (además del autoguardado).
-3. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
-4. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
+1. **Guardado y carga rápidos con una tecla** (además del autoguardado).
+2. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
+3. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
    opcional: el instalador lo va a preguntar y se conservan los originales.
 
 Más adelante, sin fecha: los parches del juego aplicados en memoria (sin modificar los `.EXE`), música
@@ -314,9 +315,10 @@ multijugador en red local. Si lo probás, contá cómo te fue en un *issue* (ver
 ### English (short)
 
 Installers to play the Spanish edition of **Space Clash: The Last Frontier** (1999) on modern **Linux**
-(via Wine) and **Windows 10/11**. They include scaled 4:3 fullscreen and binary patches for the original
-game's crash bugs, plus an in-memory runtime (`scenh.dll`): adjustable game speed with the **+**/**−** keys and
-much lower CPU usage. **The game is not included**: download **SpaceClashEnhanced.zip** from
+(CachyOS/Arch, Ubuntu/Debian; via Wine) and **Windows 10/11**. They include scaled fullscreen (widescreen
+by default) and binary patches for the original game's crash bugs, plus an in-memory runtime
+(`scenh.dll`): mouse-wheel zoom, adjustable game speed with **+**/**−**, autosave at the start of each
+mission, selection groups, shorter black screens and much lower CPU usage. **The game is not included**: download **SpaceClashEnhanced.zip** from
 [Releases](https://github.com/blackknightr89/SpaceClashEnhanced/releases/latest), extract it, and put
 your own CD image (`.bin`/`.cue` or `.iso`) in `SpaceClashEnhanced/disk/`.
 Then run `install-spaceclash.cmd` (Windows) or `bash install-spaceclash.sh install` (Linux).

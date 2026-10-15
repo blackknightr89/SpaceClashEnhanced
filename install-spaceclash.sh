@@ -1111,7 +1111,10 @@ cmd_doctor() {
     fi
     if [[ -f "$GAME_DIR/CDSC.INS" ]]; then echo "    CDSC.INS = $(cat "$GAME_DIR/CDSC.INS")"; fi
     [[ -f "$GAME_DIR/CLASH.CFG" ]] && echo "    Resolución del juego: $(game_res_name) (Opciones del juego o --game-res)"
-    if have gst-inspect-1.0; then
+    if [[ "$(pkg_family)" == apt && "$SC_WINE" == wine ]]; then   # Ubuntu/Debian: lo que usa el Wine de 32 bits
+        chk "wine32 (i386)"                        "[[ -z \"\$(apt_missing wine32:i386)\" ]]"
+        chk "GStreamer de 32 bits (bad, ugly, libav)" "[[ -z \"\$(apt_missing gstreamer1.0-plugins-bad:i386 gstreamer1.0-plugins-ugly:i386 gstreamer1.0-libav:i386)\" ]]"
+    elif have gst-inspect-1.0; then
         chk "GStreamer mpegpsdemux"                "gst-inspect-1.0 mpegpsdemux >/dev/null 2>&1"
         chk "GStreamer decodificador MPEG-1"       "gst-inspect-1.0 avdec_mpeg2video >/dev/null 2>&1 || gst-inspect-1.0 mpeg2dec >/dev/null 2>&1"
     fi
