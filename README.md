@@ -285,7 +285,7 @@ Ubuntu con escritorio.
 
 Lo que viene, en orden. Se actualiza con cada versión.
 
-Recién hecho (próxima versión): **Ubuntu / Debian**, con instrucciones en este README, y el instalador de
+Recién hecho en **v1.8**: **Ubuntu / Debian**, con instrucciones en este README, y el instalador de
 Windows al día con todo lo anterior.
 
 1. **Guardado y carga rápidos con una tecla** (además del autoguardado).
