@@ -139,6 +139,11 @@ en memoria, sin cambiar la lógica del juego:
 - **Guardado y carga rápidos:** **F12** guarda y **Ctrl+F12** carga, en la parte planetaria y en el mapa
   estelar (también en pausa; no con una ventana abierta ni en multijugador). Usa la novena ranura de la
   lista (aparece como "RAPIDA - …") y tampoco pisa una partida tuya.
+
+  ![Aviso "PARTIDA GUARDADA" al pulsar F12 en una partida planetaria a 1920×1080](screenshots/guardado-rapido-1080p.png)
+
+  ![Cargar partida con una partida propia, la del guardado rápido ("RAPIDA") y el autoguardado ("AUTO")](screenshots/cargar-partida.png)
+
 - **Cámara con las flechas del teclado:** se mueve igual que con el ratón en el borde de la pantalla, en
   la parte planetaria y en el mapa estelar (con una ventana abierta, las flechas siguen sirviendo para sus
   listas).
