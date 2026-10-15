@@ -320,9 +320,8 @@ vuelve a detectar el monitor; en Windows se corrigió la detección de la resolu
 1. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
    opcional: el instalador lo va a preguntar y se conservan los originales.
 
-Más adelante, sin fecha: los parches del juego aplicados en memoria (sin modificar los `.EXE`), música
-mejorada con IA, un instalador con ventanas, Steam Deck, partidas por Internet sin VPN y subtítulos para
-las voces.
+Más adelante, sin fecha: música mejorada con IA, un instalador con ventanas, Steam Deck, partidas por
+Internet sin VPN y subtítulos para las voces.
 
 **Se necesita ayuda para probar:** Windows 10/11 en una máquina real, Ubuntu con escritorio, y el
 multijugador en red local. Si lo probás, contá cómo te fue en un *issue* (ver [Problemas](#problemas)).
