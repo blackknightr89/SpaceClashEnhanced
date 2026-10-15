@@ -493,8 +493,13 @@ int zoom_on_message(UINT msg, WPARAM wp)
     if (!g_on || msg != WM_MOUSEWHEEL)
         return 0;
     int cur = g_pending >= 0 ? g_pending : current_level();
-    if (cur < 0)
+    if (cur < 0) {
+        /* con la panorámica todos los niveles son del modo 1024: en 640/800 (elegidos en Opciones) no hay
+         * zoom, porque escalar 4:3 a las superficies panorámicas deformaría la imagen */
+        if (g_wide && G_VIDEO_MODE != 3 && simulation_running())
+            osd_show("ZOOM: ELEGIR 1024 EN OPCIONES", 2000);
         return 1;
+    }
     int next = cur + ((short)HIWORD(wp) > 0 ? 1 : -1);   /* rueda hacia adelante = acercar */
     if (next >= 0 && next < g_nlevels)
         g_pending = next;

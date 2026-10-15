@@ -117,13 +117,14 @@ en memoria, sin cambiar la lógica del juego:
 - **Zoom con la rueda del ratón** (parte planetaria y mapa estelar): hacia adelante acerca y hacia atrás
   aleja, al instante y sin pantalla negra, sin mover el centro de la vista. Con la pantalla panorámica
   mantiene la proporción (1920×1080 → 1600×900 → 1280×720 → 1024×576); sin ella, 1024×768 → 800×600 →
-  640×480. No actúa en pausa ni en multijugador.
+  640×480. No actúa en pausa ni en multijugador. Con la pantalla panorámica, el zoom funciona con la
+  resolución 1024×768 de *Opciones* (la que se usa por defecto); en 640 u 800 avisa en pantalla.
 - **Cursor sin parpadeo:** con cnc-ddraw y Wine el cursor del original parpadeaba durante la partida.
 - **Sin espera en negro al cambiar de mapa:** al terminar una misión (o empezar la campaña espacial) la
   pantalla quedaba unos 6 segundos en negro antes del mapa estelar o la pantalla de ascenso; ahora pasa en
   alrededor de un segundo. Al ir del mapa estelar a una misión, el negro baja de unos 2,5 s a menos de 1 s.
-- **Autoguardado al empezar cada misión,** en la última ranura de la lista (aparece como "AUTO - …"). Si
-  ahí tenés una partida tuya, no la pisa.
+- **Autoguardado al empezar cada misión** (cuando cerrás los objetivos), en la última ranura de la lista
+  (aparece como "AUTO - …"). Si ahí tenés una partida tuya, no la pisa.
 - **Grupos de selección:** Ctrl+0–9 guarda la selección y 0–9 la recupera (en la parte planetaria ya
   existía; ahora también con las naves del mapa estelar). Pulsando dos veces el número, la cámara va al
   grupo.

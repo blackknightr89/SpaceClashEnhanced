@@ -3,8 +3,9 @@
  * Cada misión empieza en mission_start (0x40FBF0), llamada desde 4 sitios: el traspaso desde el mapa
  * estelar o la misión siguiente de la campaña lineal (0x411B1E, 0x411B2B), y volver a empezar tras una
  * derrota (0x412549, 0x42B78B). Se interceptan esas llamadas y, unos segundos después, desde el bucle
- * principal (PeekMessage), se guarda con la misma función que el menú Guardar (save_game 0x417C80, que en
- * la campaña espacial copia también esp.sav y planeta.nfo) y se refresca la lista de partidas (0x416F30).
+ * principal (PeekMessage) y sin ningún diálogo abierto (objetivos, "¿deseas intentar…?"), se guarda
+ * con la misma función que el menú Guardar (save_game 0x417C80, que en la campaña espacial copia
+ * también esp.sav y planeta.nfo) y se refresca la lista de partidas (0x416F30).
  *
  * Ranura: [autoguardado] ranura (0–9; por defecto 9, la décima de la lista). Solo se usa si está vacía o
  * ya es un autoguardado: a la descripción se le antepone "AUTO - " para reconocerla en Cargar partida.
@@ -25,6 +26,9 @@
 #define DESC_LEN 0x96
 #define PREFIX "AUTO - "
 #define DELAY_MS 3000
+/* diálogos (≠ 0 = abierto: los que cierran Enter/Esc en la WndProc) y ventana de F1–F7 (−1 = ninguna) */
+static const uintptr_t DIALOGS[] = {0x87DB70, 0x87EC90, 0x8BD550, 0x8BE810};
+#define PANEL_WINDOW 0x8F2298
 
 typedef void(__cdecl *start_fn)(int);
 typedef int(__cdecl *save_fn)(int);
@@ -70,9 +74,17 @@ static void mark_auto(const char *path)
     fclose(f);
 }
 
+static int dialog_open(void)
+{
+    for (size_t i = 0; i < sizeof DIALOGS / sizeof *DIALOGS; i++)
+        if (*(volatile int16_t *)DIALOGS[i])
+            return 1;
+    return *(volatile int16_t *)PANEL_WINDOW != -1;
+}
+
 void autosave_poll(void)
 {
-    if (!g_due || (int)(timeGetTime() - g_due) < 0)
+    if (!g_due || (int)(timeGetTime() - g_due) < 0 || dialog_open())
         return;
     /* esperar a que la misión esté corriendo: sin pausa, sin resultado y con la simulación avanzando */
     DWORD tick = *(volatile DWORD *)g_game->last_tick_ms;
