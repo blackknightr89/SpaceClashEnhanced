@@ -27,7 +27,7 @@ MATERIALS = ["Mercurio", "Gas Radon", "Rutenio", "Mithril",
              "Maquinaria", "Prod. Quimicos", "Alta Tecnologia"]                # CLASH 0x47BF1E (stride 0x14)
 BONUS = ["Ataque", "Defensa", "Comercio", "Politica", "Opresion"]              # SPACE 0x429F..
 # Los nombres de unidades, edificios y naves se leen del CLASH.EXE/SPACE.EXE del usuario (no se copian
-# textos del juego en este archivo; REMASTER §13). Se buscan junto a la partida o en --exe-dir.
+# textos del juego en este archivo; PLAN §13). Se buscan junto a la partida o en --exe-dir.
 UNIT_TYPES = []       # CLASH 0x478448, entradas de 0x58 B, código en +0x1D
 BUILDING_TYPES = []   # CLASH 0x479360, entradas de 0xA0 B, nombre en +0x24
 SHIP_TYPES = []       # SPACE 0x43E9F8, entradas de 0x50 B, id en +0x10, código en +0x12, nombre en +0x26

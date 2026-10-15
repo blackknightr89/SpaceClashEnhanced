@@ -47,13 +47,13 @@ CLASH,0x413EF0,func,text_count_lines,int text_count_lines(const char* s),named,1
 CLASH,0x413F20,func,draw_glyph,"void draw_glyph(int x, int y, uint8_t ch, int font, uint8_t color, int unused, uint8_t* dst)",named,"font[ch*16]; fuentes 1,5-8 → blit_rle; resto → blit_rle_solid",alias: glyph_draw
 CLASH,0x413FF0,func,draw_text,"void draw_text(int x, int y, const char* s, int font, char align, int width, uint8_t color, uint8_t* dst)",named,switch de fuentes 0..8; align 'C'/'D'/'J'; parser |c|f|n|t|x|y; 438 llamadas,hook L2 de respaldo; alias: text_draw
 CLASH,0x414810,func,draw_text_box,"void draw_text_box(int x, int y, int w, int h, const char* s, int font, char align, uint8_t color, uint8_t* dst)",named,_chkstk(0x1877C); bucle text_wrap_line; centra verticalmente; llama a draw_text,hook L2 de respaldo
-CLASH,0x414A50,func,set_video_mode,,named,REMASTER §15.C,
-CLASH,0x414B90,func,release_surfaces,,named,REMASTER §15.C,
+CLASH,0x414A50,func,set_video_mode,,named,PLAN §15.C,
+CLASH,0x414B90,func,release_surfaces,,named,PLAN §15.C,
 CLASH,0x414BD0,func,ddraw_set_palette,void ddraw_set_palette(PALETTEENTRY pal[256]),named,"pal->SetEntries(0,0,256,p) (+0x18); primary->SetPalette (+0x7C) con Restore si DDERR_SURFACELOST",
 CLASH,0x414C30,func,surface_lock,void* surface_lock(IDirectDrawSurface* s),named,Lock(+0x64) con DDSURFACEDESC 0x481DA8; devuelve lpSurface (0x481DCC) o 0,
 CLASH,0x414C80,func,surface_unlock,void surface_unlock(IDirectDrawSurface* s),named,Unlock (+0x80),
 CLASH,0x414C90,func,surface_flip,void surface_flip(void),named,"primary->Flip(0,0) (+0x2C) en bucle con Restore",
-CLASH,0x415210,func,process_running,"int process_running(const char* name, int minCount)",named,RUNTIME.md (P1),
+CLASH,0x415210,func,process_running,"int process_running(const char* name, int minCount)",named,INSTALADORES.md (P1),
 CLASH,0x415310,func,load_planet_tileset,void load_planet_tileset(char tt),named,"suelos%02d.spr→0x48E860, det%02d.spc→0x491100, det_sb%02d.spc→0x8DBC20",alias: load_terrain_set
 CLASH,0x4153C0,func,game_init,int game_init(void),named,"SetTimer(1,1000)/(2,150)/(3,180000); carga FNT*.SPC y CURSORES.SPC",
 CLASH,0x415401,code,read_cdsc_ins,,named,Cdsc.ins → letra del CD en 0x8EC2E1,
@@ -213,7 +213,7 @@ CLASH,0x452590,func,_fileno,int _fileno(FILE* f),crt,devuelve f->_file,
 CLASH,0x454340,data,g_cursor_anim_defs,struct {int n; SpcSprite* bank; frames*}[30],named,todos apuntan a 0x8E9900,
 CLASH,0x457030,data,s_rb,"char[] ""rb""",named,,
 CLASH,0x457508,data,g_font_tag_names,char[9][8],named,"nombres de |f: 0x16b,0x16a,0x33b,0x33a,22x18,04x05,00x22,00x18,00x13",
-CLASH,0x457550,data,g_video_modes,"struct {int32 w,h,bpp}[4]",named,REMASTER §15.C,índice 0 (640×400) nunca se usa
+CLASH,0x457550,data,g_video_modes,"struct {int32 w,h,bpp}[4]",named,PLAN §15.C,índice 0 (640×400) nunca se usa
 CLASH,0x4580F0,data,s_clash_cfg,"char[] ""clash.cfg""",named,cfg_load/cfg_save,
 CLASH,0x45CF60,data,g_tutorial_texts,char[][500],named,"lea eax,[edx*4+0x45CF60] (edx=idx*125) en 0x432F2E → draw_text_box",
 CLASH,0x461E50,data,g_hud_buttons_tmpl,ButtonPanel,named,plantilla: F1-CONFIGURACION … F7-BIBLIOTECA,alias: g_panel_topbar
@@ -365,8 +365,8 @@ CLASH,0x8EC300,data,g_font_16b,SpcSprite[256],named,spc_load(FNT16B.SPC); font i
 CLASH,0x8ED310,data,g_net_last_tick,uint32_t[4],named,net_exec_commands guarda el tick recibido,
 CLASH,0x8EFA60,data,g_btn_territorios,Button,named,"button_init(…,""F11 Normal/Territorios"")",
 CLASH,0x8EFB38,data,g_radar_available,int32,hypothesis,0x419460: misión con flag o edificio del jugador; si 0 → MAPA NO DISPONIBLE,
-CLASH,0x8F1E60,data,g_screen_w,int16_t,named,REMASTER §15.C,
-CLASH,0x8F1E62,data,g_screen_h,int16_t,named,REMASTER §15.C,
+CLASH,0x8F1E60,data,g_screen_w,int16_t,named,PLAN §15.C,
+CLASH,0x8F1E62,data,g_screen_h,int16_t,named,PLAN §15.C,
 CLASH,0x8F1E70,data,g_prev_frame,uint8_t*,hypothesis,malloc(1024*768) en 0x415530; copia del cuadro en 0x42C040; fuente al restaurar el cursor,alias: g_frame_copy
 CLASH,0x8F1E74,data,g_tick_count,int,named,++ en cada game_logic_step y por segundo en pausa,alias: g_net_tick
 CLASH,0x8F1E84,data,g_player,int8_t,named,jugador local en todos los .nfo/.sav,
@@ -394,7 +394,7 @@ SPACE,0x40D5B0,func,ddraw_set_palette,void ddraw_set_palette(PALETTEENTRY pal[25
 SPACE,0x40D610,func,surface_lock,void* surface_lock(IDirectDrawSurface* s),named,Lock(+0x64) con 0x467668,
 SPACE,0x40D660,func,surface_unlock,void surface_unlock(IDirectDrawSurface* s),named,Unlock (+0x80),
 SPACE,0x40D670,func,surface_flip,void surface_flip(void),named,primary->Flip (+0x2C) con Restore,
-SPACE,0x40DBF0,func,process_running,,named,RUNTIME.md (P1),
+SPACE,0x40DBF0,func,process_running,,named,INSTALADORES.md (P1),
 SPACE,0x40DE90,func,load_space_resources,void load_space_resources(void),named,spc_load de fuentes/menús/sprites; pcx_load(.\Img\fondo.pcx → 0x80B174),
 SPACE,0x40E150,func,game_init,int game_init(void),hypothesis,SetTimer 1/2/3 (push 0x3E8 en 0x40E5CE),alias: space_init
 SPACE,0x40E960,func,game_shutdown,void game_shutdown(void),named,KillTimer 1..3; llamada en WM_CLOSE,
@@ -423,13 +423,13 @@ SPACE,0x41BD80,func,check_promotion,int check_promotion(int won),named,"umbrales
 SPACE,0x41C5D0,func,cursor_place,void cursor_place(void),named,mismo cuerpo que CLASH 0x42ABE0 con 0x8107C0,
 SPACE,0x41CBB0,func,frame_tick,void frame_tick(void),named,"timeGetTime en 0x41CBC1; cmp edx,0x25 en 0x41CBE0",punto de Q2: imm8 en 0x41CBE2
 SPACE,0x41CD10,func,wnd_proc,"LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)",named,lpfnWndProc = 0x761F68,Ghidra no la crea como función
-SPACE,0x420B00,func,set_screen_size,,named,REMASTER §15.C,
+SPACE,0x420B00,func,set_screen_size,,named,PLAN §15.C,
 SPACE,0x420D80,func,ddraw_set_mode_main,int ddraw_set_mode_main(int16 idx),named,"ddraw_set_mode(idx, hwnd 0x69806C); no cambia 0x5C16E6",usada con 1 al arrancar (0x40E18C)
 SPACE,0x420DA0,func,clear_window_gdi,void clear_window_gdi(void),named,FillRect 8000×8000 negro,
-SPACE,0x420DE0,func,change_video_mode,,named,REMASTER §15.C,envoltorio; el SetDisplayMode real está en 0x40D430
+SPACE,0x420DE0,func,change_video_mode,,named,PLAN §15.C,envoltorio; el SetDisplayMode real está en 0x40D430
 SPACE,0x420E30,func,rank_name,"void rank_name(char* out, int8_t rank)",hypothesis,usada en la descripcion de sav_save como en CLASH 0x4276D0,
 SPACE,0x420EF0,func,present_framebuf,int present_framebuf(void),named,lock back; copia 0x487D0C ancho*alto; unlock; flip,sitio P2/P4 0x420F03
-SPACE,0x420F50,func,clear_surface,,named,REMASTER §15.C,
+SPACE,0x420F50,func,clear_surface,,named,PLAN §15.C,
 SPACE,0x421140,func,pump_one_message,void pump_one_message(void),named,PeekMessage+GetMessage+Translate+Dispatch,
 SPACE,0x421190,func,pause_loop,void pause_loop(void),named,while(0x69A1E4) {flip; pump_one_message},
 SPACE,0x429A80,func,empire_info_screen,void empire_info_screen(void),hypothesis,Creditos/Planetas Colonizados/Naves/Bonificaciones,
@@ -461,7 +461,7 @@ SPACE,0x437550,func,operator_new,,crt,mismo cuerpo que CLASH:0x448A90,
 SPACE,0x43A750,func,_filelength,,crt,mismo cuerpo que CLASH:0x452500,
 SPACE,0x43A7E0,func,_fileno,,crt,mismo cuerpo que CLASH:0x452590,
 SPACE,0x43C980,data,g_cursor_anim_defs,struct {int n; SpcSprite* bank; frames*}[37],named,"entradas 0-28 → 0x8107C0, 29-36 → 0x812A80",
-SPACE,0x43E458,data,g_video_modes,"struct {int32 w,h,bpp}[4]",named,REMASTER §15.C,índice 0 (640×400) nunca se usa
+SPACE,0x43E458,data,g_video_modes,"struct {int32 w,h,bpp}[4]",named,PLAN §15.C,índice 0 (640×400) nunca se usa
 SPACE,0x455C00,data,g_empires,EmpireRec[4] (0xF0 B),named,"fwrite(0x455C00+p*0xF0,0xF0) en esp_sav_write",
 SPACE,0x455C28,data,g_empire_credits,double (campo +0x28),named,Creditos: %7ld um,
 SPACE,0x4584A8,data,g_tutorial_texts,char[][500],named,"lea edx,[ecx*4+0x4584A8] en 0x4206AD",
@@ -481,7 +481,7 @@ SPACE,0x47F7A0,data,g_font_22x18,SpcSprite[256],named,spc_load(FNT22X18.SPC); fo
 SPACE,0x486D00,data,g_font_18,SpcSprite[256],named,spc_load(FNT18.SPC); font id 7,
 SPACE,0x487D04,data,g_sfx_enabled,int32_t,named,del .nfo (CLASH 0x493204); condiciona 0x41F670,
 SPACE,0x487D0C,data,g_framebuf,uint8_t*,named,malloc(1024*768) en 0x40E1CA; present_framebuf la copia a la superficie,
-SPACE,0x5C16E6,data,g_video_mode_idx,,named,REMASTER §15.C,índice de modo actual (1–3)
+SPACE,0x5C16E6,data,g_video_mode_idx,,named,PLAN §15.C,índice de modo actual (1–3)
 SPACE,0x5C1704,data,g_fondo_scroll_x,int32_t,named,= g_galaxy_cam_x/8; offset x en draw_fondo,
 SPACE,0x5C1708,data,g_fondo_scroll_y,int32_t,named,= g_galaxy_cam_y/8; fila en draw_fondo (stride 0x618),
 SPACE,0x5C1730,data,g_app_active,int,named,WM_ACTIVATEAPP,
@@ -519,8 +519,8 @@ SPACE,0x80B180,data,g_music_enabled,int32_t,named,del .nfo (CLASH 0x8DA008); si 
 SPACE,0x80D780,data,g_font_13,SpcSprite[256],named,spc_load(FNT13.SPC); font id 6,
 SPACE,0x8107C0,data,g_spr_cursores,SpcSprite[256],named,spc_load(CURSORES.SPC) en 0x40DE90,
 SPACE,0x812A80,data,g_spr_cursor2,SpcSprite[256],named,spc_load(CURSOR2.SPC) en 0x40DE90,
-SPACE,0x817090,data,g_screen_w,int16_t,named,REMASTER §15.C,
-SPACE,0x817092,data,g_screen_h,int16_t,named,REMASTER §15.C,
+SPACE,0x817090,data,g_screen_w,int16_t,named,PLAN §15.C,
+SPACE,0x817092,data,g_screen_h,int16_t,named,PLAN §15.C,
 SPACE,0x8170A0,data,g_prev_frame,uint8_t*,hypothesis,malloc(1024*768) en 0x40E1E9; copia de 0x487D0C en 0x41CCAF,
 SPACE,0x8170AC,data,g_galaxy_variant,uint8_t 0..3,named,rand()&3 en nueva campana; indice de 0x4555C0,
 SPACE,0x98A244,data,g_player_empire,int8_t,hypothesis,u8 del bloque común de los .nfo; índice de Nivel%02d/Prot%02d y uni%d.spc,alias: g_player

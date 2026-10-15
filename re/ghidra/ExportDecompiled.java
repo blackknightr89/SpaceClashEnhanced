@@ -1,7 +1,7 @@
 // Exporta el pseudo-C de todas las funciones (o de las direcciones indicadas) a un archivo .c, con la
 // dirección y el nombre de cada función como cabecera. Sirve para buscar con grep fuera de Ghidra.
 // Argumentos (headless): ARCHIVO_SALIDA [va1 va2 …]
-// El resultado deriva del EXE original: no se sube al repositorio (REMASTER §13).
+// El resultado deriva del EXE original: no se sube al repositorio (PLAN §13).
 //@category SpaceClash
 import java.io.File;
 import java.io.PrintWriter;

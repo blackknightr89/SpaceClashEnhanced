@@ -36,7 +36,7 @@ SC_VDESKTOP="${SC_VDESKTOP:-1}"                         # 1 = ejecutar en escrit
 SC_VDESKTOP_RES="${SC_VDESKTOP_RES:-auto}"              # tamaño del escritorio virtual (auto = monitor en scaled, 1024x768 en window)
 SC_GAMESCOPE="${SC_GAMESCOPE:-0}"                       # 1 = envolver con gamescope (escalado a pantalla completa)
 SC_FULL="${SC_FULL:-0}"                                 # 1 = copiar música y vídeos al disco
-SC_VIDEOS="${SC_VIDEOS:-fit}"                           # fit (vídeos 4:3 con barras a la resolución del monitor) | original
+SC_VIDEOS="${SC_VIDEOS:-ask}"                           # ask (preguntar; al reinstalar, lo elegido) | fit (vídeos 4:3 con barras) | original
 SC_VIDEOS_AI="${SC_VIDEOS_AI:-ask}"                     # ask (preguntar, def. no) | off | general | general-sharp | x4plus: vídeos con IA
 SC_PYTHON="${SC_PYTHON:-}"                              # Python con torch + spandrel (vacío = buscarlo; ver setup_videos_ai)
 SC_DESKTOP="${SC_DESKTOP:-1}"                           # 1 = crear acceso directo .desktop
@@ -795,6 +795,30 @@ setup_videos_ai() {
     fi
 }
 
+# --videos ask (por defecto): al reinstalar se conserva lo elegido (el lanzador lo guarda); en una
+# instalación nueva se pregunta (respuesta por defecto: sí). Sin terminal, vídeos originales.
+resolve_videos() {
+    local a prev
+    [[ "$SC_VIDEOS" =~ ^(ask|fit|original)$ ]] || die "SC_VIDEOS inválido: $SC_VIDEOS (ask|fit|original)"
+    [[ "$SC_VIDEOS" == ask ]] || return 0
+    prev=""
+    [[ -f "$LAUNCHER" ]] && prev=$(sed -n 's/^SC_VIDEOS="\${SC_VIDEOS:-\(fit\|original\)}"$/\1/p' "$LAUNCHER")
+    if [[ -n "$prev" ]]; then
+        SC_VIDEOS=$prev
+    elif [[ "$SC_DISPLAY" != scaled ]]; then
+        SC_VIDEOS=original   # en ventana los vídeos no se estiran
+    elif [[ -t 0 ]]; then
+        echo "    El juego estira los vídeos (logos, intro y finales) a lo ancho de la pantalla. Se puede"
+        echo "    hacer una copia adaptada a tu monitor, en 4:3 con barras negras (≈1 min; los originales"
+        echo "    se conservan; requiere ffmpeg)."
+        read -r -p "    ¿Adaptar los vídeos a 4:3? [S/n] " a || a=""
+        [[ "$a" =~ ^[nN]$ ]] && SC_VIDEOS=original || SC_VIDEOS=fit
+    else
+        SC_VIDEOS=original
+        log "Sin terminal para preguntar: vídeos originales (para adaptarlos: --videos fit)"
+    fi
+}
+
 setup_videos() {
     local helper="$SC_ROOT/videos-fit.sh" res
     [[ "$SC_VIDEOS" == fit || "$SC_VIDEOS" == original ]] || die "SC_VIDEOS inválido: $SC_VIDEOS (fit|original)"
@@ -934,6 +958,7 @@ cmd_install() {
     [[ "$SC_GAME_RES" =~ ^(auto|keep|640|800|1024)$ ]] || die "SC_GAME_RES inválido: $SC_GAME_RES (auto|keep|640|800|1024)"
     log "Instalando Space Clash en $SC_ROOT"
     check_res
+    resolve_videos
     check_deps
     if [[ -f "$CD_DIR/UNCLASH.EXE" && "${FORCE:-0}" != 1 ]]; then
         ok "CD ya extraído en $CD_DIR (no hace falta la imagen)"
@@ -1089,9 +1114,10 @@ Opciones (o variables de entorno equivalentes):
   --gamescope         Envolver con gamescope (escalado)   (SC_GAMESCOPE=1)
   --cd-letter X       Letra del CD virtual                (SC_CD_LETTER, def: r)
   --full              Copia también MUSICAS y VIDEOS al disco (SC_FULL=1)
-  --videos MODO       fit = vídeos 4:3 con barras a pantalla completa (requiere ffmpeg)
+  --videos MODO       ask = preguntar en una instalación nueva (al reinstalar se conserva lo elegido)
+                      fit = vídeos 4:3 con barras a pantalla completa (requiere ffmpeg)
                       original = vídeos sin tocar (estirados en modo scaled)
-                                                          (SC_VIDEOS, def: fit)
+                                                          (SC_VIDEOS, def: ask)
   --videos-ai M       Escalado de los vídeos con IA (una vez; requiere Python con PyTorch y
                       spandrel, ideal con GPU NVIDIA): ask|off|general|general-sharp|x4plus
                       ask = preguntar al instalar (respuesta por defecto: no)

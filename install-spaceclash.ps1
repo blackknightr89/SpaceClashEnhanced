@@ -9,10 +9,11 @@
     - Aplica los parches de compatibilidad P1-P4 (bugs del juego original; detalle en la sección «Parches» de este script).
     - Modo de pantalla "Scaled" (por defecto): cnc-ddraw, pantalla completa 4:3 centrada.
       Modo "Native": DirectDraw de Windows con capas de compatibilidad.
-    - Opcional (-Videos Fit): vídeos 4:3 con barras negras a la resolución del monitor, para que no se
-      vean estirados en modo Scaled (requiere ffmpeg; se descarga si no está). Ver docs/VIDEOS.md.
-    - Opcional: vídeos escalados con IA (tools\upscale-videos.py; se pregunta al instalar con -Videos Fit
-      si hay Python con PyTorch y spandrel).
+    - Vídeos 4:3 con barras negras a la resolución del monitor, para que no se vean estirados en modo
+      Scaled (requiere ffmpeg; se descarga si no está): se pregunta en una instalación nueva (-Videos Ask);
+      al reinstalar se conserva lo elegido. Ver docs/VIDEOS.md.
+    - Opcional: vídeos escalados con IA (tools\upscale-videos.py; se pregunta al instalar si los vídeos
+      se adaptan y hay Python con PyTorch y spandrel).
     - Crea un lanzador (accesos directos en Escritorio y menú Inicio) que asigna una letra de
       unidad a la carpeta del CD con SUBST y ejecuta el juego.
     Documentación para usuarios: README.md.
@@ -52,12 +53,13 @@ param(
     [string]$GameRes = 'Auto',
     # No tocar el renderizador de vídeo de DirectShow (ver Set-VmrMerit más abajo)
     [switch]$NoVideoFix,
-    # Fit = vídeos 4:3 con barras a la resolución del monitor (solo Scaled; sin verificar aún en Windows)
-    # Original = vídeos sin tocar (en Scaled podrían verse estirados)
-    [ValidateSet('Fit', 'Original')]
-    [string]$Videos = 'Original',
+    # Ask = preguntar en una instalación nueva (respuesta por defecto: sí); al reinstalar se conserva lo
+    # elegido. Fit = vídeos 4:3 con barras a la resolución del monitor (solo Scaled; sin verificar aún en
+    # Windows). Original = vídeos sin tocar (en Scaled se ven estirados)
+    [ValidateSet('Ask', 'Fit', 'Original')]
+    [string]$Videos = 'Ask',
     # Escalado de los vídeos con IA (tools\upscale-videos.py; requiere Python con PyTorch y spandrel, ideal
-    # con GPU NVIDIA). Ask = preguntar al instalar con -Videos Fit (respuesta por defecto: no)
+    # con GPU NVIDIA). Ask = preguntar al instalar si los vídeos se adaptan (respuesta por defecto: no)
     [ValidateSet('Ask', 'Off', 'General', 'GeneralSharp', 'X4plus')]
     [string]$VideosAi = 'Ask',
     # Python a usar para -VideosAi (por defecto: el lanzador py -3, o python.exe del PATH)
@@ -834,6 +836,27 @@ function Invoke-VideosAi {
     else { Write-Warn2 'Falló el escalado con IA: se usan los vídeos normales.' }
 }
 
+# -Videos Ask: al reinstalar, lo elegido (VideosFit.ps1 solo queda en la carpeta con los vídeos adaptados);
+# en una instalación nueva se pregunta. Sin consola interactiva, vídeos originales.
+function Resolve-Videos {
+    if ($Videos -ne 'Ask') { return }
+    if ($Display -ne 'Scaled') { $script:Videos = 'Original'; return }
+    if (Test-Path $Launcher) {
+        $script:Videos = $(if (Test-Path $VideoFit) { 'Fit' } else { 'Original' })
+        return
+    }
+    if ([Console]::IsInputRedirected) {
+        $script:Videos = 'Original'
+        Write-Host '    Sin consola para preguntar: vídeos originales (para adaptarlos: -Videos Fit)'
+        return
+    }
+    Write-Host '    El juego estira los vídeos (logos, intro y finales) a lo ancho de la pantalla. Se puede hacer'
+    Write-Host '    una copia adaptada a tu monitor, en 4:3 con barras negras (1-2 min; los originales se'
+    Write-Host '    conservan; si no tenés ffmpeg se descarga, unos 110 MB).'
+    $a = Read-Host '    ¿Adaptar los vídeos a 4:3? [S/n]'
+    $script:Videos = $(if ($a -match '^[nN]') { 'Original' } else { 'Fit' })
+}
+
 function Install-Videos {
     # UTF-8 con BOM: Windows PowerShell 5.1 lee los .ps1 sin BOM como ANSI
     [System.IO.File]::WriteAllText($VideoFit, $VideoFitCode, (New-Object System.Text.UTF8Encoding $true))
@@ -974,6 +997,7 @@ function Invoke-Install {
     }
     Write-Step "Instalando Space Clash en $InstallDir"
     Test-Res | Out-Null
+    Resolve-Videos
     Test-Requirements
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Expand-GameImage

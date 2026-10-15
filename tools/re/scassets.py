@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""scassets.py — exporta y valida los assets de TU copia de Space Clash (etapa 2 del REMASTER).
+"""scassets.py — exporta y valida los assets de TU copia de Space Clash (etapa 2 de docs/PLAN.md).
 
 Subcomandos:
     spc   ARCHIVO.SPC…  → hoja PNG con transparencia + índice JSON (y, con --frames, un PNG por sprite)
@@ -16,7 +16,7 @@ Requisitos: Python 3.10+ y Pillow (pip install pillow).
 Ejemplo:
     python3 tools/re/iso9660.py disk/ --extract /tmp/sc-cd
     python3 tools/re/scassets.py all /tmp/sc-cd --out /tmp/sc-export
-Lo exportado sale de tu CD: no lo subas a ningún sitio (ver REMASTER §13).
+Lo exportado sale de tu CD: no lo subas a ningún sitio (ver PLAN §13).
 """
 import argparse
 import hashlib

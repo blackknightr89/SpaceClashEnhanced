@@ -1,4 +1,4 @@
-/* scenh — runtime de mejoras de Space Clash (etapa 3 del REMASTER).
+/* scenh — runtime de mejoras de Space Clash (etapa 3 de docs/PLAN.md).
  *
  * Se carga dentro de CLASH.EXE y SPACE.EXE porque el instalador renombra su import "GDI32.dll" a
  * "SCENH.dll" (mismo largo); esta DLL reenvía GetStockObject a gdi32 (ver scenh.def). Todo lo demás se

@@ -4,7 +4,7 @@ Instaladores para jugar **Space Clash: The Last Frontier** (Dinamic Multimedia /
 en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
 
 - Pantalla completa en 4:3, escalada y centrada en monitores modernos (1080p, 1440p…).
-- Vídeos de introducción y finales a pantalla completa sin deformar (Linux; en Windows, opcional).
+- Vídeos de introducción y finales a pantalla completa sin deformar (el instalador lo pregunta).
 - No hace falta el CD físico: alcanza con la imagen del disco (`.bin` + `.cue`, o `.iso`).
 - Corrige errores del juego original que lo hacían colgarse en sistemas modernos (ver
   [qué se corrige](#qué-se-corrige)).
@@ -97,14 +97,14 @@ unzip, curl, ffmpeg y los plugins de GStreamer), pero solo se probó en CachyOS.
 - Las partidas se guardan dentro de la carpeta de instalación:
   - Linux: `~/Games/space-clash/prefix/drive_c/SCLASH/`
   - Windows: `%USERPROFILE%\Games\SpaceClash\SCLASH\`
-- **Vídeos:** el juego los estira a toda la pantalla. Para que se vean en 4:3, el instalador genera
-  una copia adaptada a la resolución de tu monitor, con barras negras a los lados (tarda alrededor de un
-  minuto; los originales se conservan). Si cambiás de monitor, el juego los vuelve a adaptar la próxima
+- **Vídeos:** el juego los estira a toda la pantalla. Para que se vean en 4:3, el instalador puede
+  generar una copia adaptada a la resolución de tu monitor, con barras negras a los lados (tarda alrededor
+  de un minuto; los originales se conservan). **Lo pregunta al instalar** (respuesta por defecto: sí); al
+  reinstalar se conserva lo que elegiste. Si cambiás de monitor, el juego los vuelve a adaptar la próxima
   vez que lo abras, antes de empezar.
-  - Linux: activado por defecto (necesita `ffmpeg`). Para dejar los originales:
-    `bash install-spaceclash.sh install --videos original`
-  - Windows: opcional, porque todavía no se probó en Windows real:
-    `install-spaceclash.cmd -Videos Fit` (descarga ffmpeg si no lo tenés, ≈110 MB).
+  - Linux: necesita `ffmpeg`. Sin preguntar: `--videos fit` o `--videos original`.
+  - Windows: descarga ffmpeg si no lo tenés (≈110 MB); todavía no se probó en Windows real. Sin
+    preguntar: `-Videos Fit` o `-Videos Original`.
 
 ## Mejoras durante la partida
 
@@ -172,10 +172,10 @@ del juego, y **una sola vez**: tardan unos 10 minutos con una placa NVIDIA (hora
 Requisito: Python 3.10 o más nuevo con **PyTorch** (con CUDA para usar la GPU; ver
 [pytorch.org](https://pytorch.org)). Lo demás lo resuelve el instalador.
 
-- **Al instalar (Linux):** si hay PyTorch, el instalador pregunta si querés escalar los vídeos (por
-  defecto, no). Si respondés que sí, crea un entorno en `~/.local/share/spaceclash-venv` con lo que falta
+- **Al instalar (Linux):** si elegiste adaptar los vídeos y hay PyTorch, el instalador pregunta si querés
+  escalarlos (por defecto, no). Si respondés que sí, crea un entorno en `~/.local/share/spaceclash-venv` con lo que falta
   (spandrel) y los escala.
-- **Al instalar (Windows):** pregunta solo si instalás con `-Videos Fit` y hay un Python con PyTorch y
+- **Al instalar (Windows):** pregunta si elegiste adaptar los vídeos y hay un Python con PyTorch y
   spandrel (`pip install torch spandrel numpy`).
 - **En cualquier momento:** `~/.local/share/spaceclash-venv/bin/python tools/upscale-videos.py` (Linux,
   una vez creado el entorno; otra carpeta: `--root DIR`) o
@@ -222,7 +222,7 @@ restaurarla. Si no querés la copia: `--no-backup` (Linux) o `-NoBackup` (Window
    | *"El juego está abierto. Cerralo antes de instalar"* | Cerrá el juego. Si quedó colgado, en Linux: `WINEPREFIX=~/Games/space-clash/prefix wineserver -k`; en Windows: Administrador de tareas → finalizar `CLASH.EXE`/`SPACE.EXE` |
    | Pantalla negra (se oye el juego) | Linux: `bash install-spaceclash.sh install --renderer gdi` · Windows: `install-spaceclash.cmd -Renderer gdi` |
    | Vídeos en blanco | Windows: probá `install-spaceclash.cmd -Display Native` |
-   | Vídeos estirados a lo ancho | Linux: instalá `ffmpeg` y reinstalá · Windows: `install-spaceclash.cmd -Videos Fit` |
+   | Vídeos estirados a lo ancho | Reinstalá con `--videos fit` (Linux, con `ffmpeg` instalado) o `install-spaceclash.cmd -Videos Fit` (Windows) |
    | Vídeos con barras negras dobles o achicados (Windows con `-Videos Fit`) | Reinstalá sin esa opción y abrí un *issue* |
    | El juego queda minimizado | Linux: no desactives el escritorio virtual (`SC_VDESKTOP=0`) |
    | Aparece en el otro monitor | Movelo con Win/Meta + Shift + flecha |
@@ -258,12 +258,32 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 | Instalación | ✅ probado | ✅ probado fuera de Windows · ⏳ falta probar en Windows real |
 | Vídeos, menú, campaña planetaria y espacial | ✅ | ⏳ |
 | Pantalla completa escalada 4:3 | ✅ | ⏳ |
-| Vídeos a pantalla completa en 4:3 | ✅ | ⏳ (opcional, `-Videos Fit`) |
+| Vídeos a pantalla completa en 4:3 (se pregunta al instalar) | ✅ | ⏳ |
 | Vídeos escalados con IA (opcional) | ✅ | ⏳ |
 | Guardar/cargar | ✅ | ⏳ |
 | Velocidad con +/− y menos CPU (`scenh.dll`) | ✅ | ⏳ |
 | Pantalla panorámica (experimental, por defecto; `--res off` la quita) | 🟡 | ⏳ |
 | Multijugador LAN | ⏳ | ⏳ |
+
+## Próximos pasos
+
+Lo que viene, en orden. Se actualiza con cada versión.
+
+1. **Ubuntu.** Instalador con los paquetes de Ubuntu (`apt`) y sus instrucciones en este README, probado en
+   Ubuntu 24.04.
+2. **Windows al día.** Revisar que el instalador de Windows tenga todo lo de las últimas versiones (se
+   sigue probando fuera de Windows hasta que alguien lo pruebe en un Windows real).
+3. **Guardado y carga rápidos con una tecla** (además del autoguardado).
+4. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
+5. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
+   opcional: el instalador lo va a preguntar y se conservan los originales.
+
+Más adelante, sin fecha: los parches del juego aplicados en memoria (sin modificar los `.EXE`), música
+mejorada con IA, un instalador con ventanas, Steam Deck, partidas por Internet sin VPN y subtítulos para
+las voces.
+
+**Se necesita ayuda para probar:** Windows 10/11 en una máquina real, Ubuntu con escritorio, y el
+multijugador en red local. Si lo probás, contá cómo te fue en un *issue* (ver [Problemas](#problemas)).
 
 ## Créditos y aviso legal
 
