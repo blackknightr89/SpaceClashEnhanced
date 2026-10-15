@@ -84,24 +84,78 @@ wine_q() { "$SC_WINE" "$@" >/dev/null 2>&1; }   # wine silencioso
 # falta ningún paquete lib32-* para ejecutar este juego de 32 bits).
 PACMAN_PKGS=(wine 7zip python unzip curl imagemagick ffmpeg
              gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav)
+# Ubuntu/Debian: el Wine de Ubuntu 24.04 (9.0) no es WoW64, así que el juego de 32 bits necesita wine32
+# (arquitectura i386) y los plugins de GStreamer de 32 bits para los vídeos (winegstreamer de 32 bits).
+APT_PKGS=(wine wine64 wine32:i386 7zip python3 unzip curl imagemagick ffmpeg x11-xserver-utils
+          gstreamer1.0-plugins-base:i386 gstreamer1.0-plugins-good:i386 gstreamer1.0-plugins-bad:i386
+          gstreamer1.0-plugins-ugly:i386 gstreamer1.0-libav:i386)
+
+pkg_family() {   # arch | apt | otra
+    if have pacman; then echo arch; elif have apt-get && have dpkg-query; then echo apt; else echo otra; fi
+}
+as_root() { if ((EUID == 0)); then "$@"; else sudo "$@"; fi; }
+deps_cmd() {     # comando para instalar todas las dependencias en esta distribución
+    case "$(pkg_family)" in
+        arch) echo "sudo pacman -S --needed ${PACMAN_PKGS[*]}" ;;
+        apt)  echo "sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install ${APT_PKGS[*]}" ;;
+        *)    echo "Wine >= 9 (con soporte de 32 bits), 7-Zip, Python 3, unzip, curl, ffmpeg y los plugins de GStreamer (base, good, bad, ugly, libav)" ;;
+    esac
+}
+pkg_hint() {     # pkg_hint ffmpeg|mingw → comando para instalar solo eso
+    case "$(pkg_family):$1" in
+        arch:ffmpeg) echo "sudo pacman -S ffmpeg" ;;
+        apt:ffmpeg)  echo "sudo apt install ffmpeg" ;;
+        arch:mingw)  echo "sudo pacman -S mingw-w64-gcc" ;;
+        apt:mingw)   echo "sudo apt install gcc-mingw-w64-i686" ;;
+        *:ffmpeg)    echo "instalá ffmpeg" ;;
+        *:mingw)     echo "instalá MinGW-w64 para i686" ;;
+    esac
+}
+apt_missing() {  # imprime los paquetes de la lista que no están instalados
+    local p
+    for p in "$@"; do
+        [[ "$(dpkg-query -W -f='${Status}' "$p" 2>/dev/null)" == "install ok installed" ]] || echo "$p"
+    done
+}
+install_deps() {
+    case "$(pkg_family)" in
+        arch)
+            log "Instalando dependencias con pacman (pedirá contraseña de sudo)…"
+            as_root pacman -S --needed "${PACMAN_PKGS[@]}" ;;
+        apt)
+            log "Instalando dependencias con apt (pedirá contraseña de sudo)…"
+            dpkg --print-foreign-architectures | grep -qx i386 || as_root dpkg --add-architecture i386
+            as_root apt-get update
+            as_root apt-get install -y "${APT_PKGS[@]}" ;;
+        *) die "No sé instalar dependencias en esta distribución. Instalá: $(deps_cmd)" ;;
+    esac
+}
 
 check_deps() {
-    local missing=()
+    local missing=() fam
+    fam=$(pkg_family)
     for bin in "$SC_WINE" 7z python3 unzip curl; do
         have "$bin" || missing+=("$bin")
     done
+    # Ubuntu/Debian con el Wine del sistema: sin wine32 el juego (32 bits) no arranca
+    if [[ "$fam" == apt && "$SC_WINE" == wine ]] && [[ -n "$(apt_missing wine32:i386)" ]]; then
+        missing+=("wine32:i386")
+    fi
     if ((${#missing[@]})); then
-        warn "Faltan comandos: ${missing[*]}"
-        if [[ "${INSTALL_DEPS:-0}" == 1 ]] && have pacman; then
-            log "Instalando dependencias con pacman (pedirá contraseña de sudo)…"
-            sudo pacman -S --needed "${PACMAN_PKGS[@]}"
+        warn "Faltan: ${missing[*]}"
+        if [[ "${INSTALL_DEPS:-0}" == 1 ]]; then
+            install_deps
         else
-            die "Instalá las dependencias: sudo pacman -S --needed ${PACMAN_PKGS[*]}
+            die "Instalá las dependencias: $(deps_cmd)
        (o re-ejecutá con --install-deps)"
         fi
     fi
     # GStreamer: necesario para los vídeos MPEG-1 (DirectShow → winegstreamer)
-    if have gst-inspect-1.0; then
+    if [[ "$fam" == apt && "$SC_WINE" == wine ]]; then
+        local gst
+        gst=$(apt_missing gstreamer1.0-plugins-bad:i386 gstreamer1.0-libav:i386 gstreamer1.0-plugins-ugly:i386 | tr '\n' ' ')
+        [[ -z "$gst" ]] || warn "Faltan plugins de GStreamer de 32 bits ($gst): los vídeos podrían no reproducirse. sudo apt install $gst"
+    elif have gst-inspect-1.0; then
         gst-inspect-1.0 mpegpsdemux >/dev/null 2>&1 || warn "Falta el plugin GStreamer 'mpegpsdemux' (gst-plugins-bad). Los vídeos podrían no reproducirse."
         gst-inspect-1.0 mpeg2dec     >/dev/null 2>&1 || gst-inspect-1.0 avdec_mpeg2video >/dev/null 2>&1 \
             || warn "Falta decodificador MPEG-1 (gst-libav o gst-plugins-ugly). Los vídeos podrían no reproducirse."
@@ -109,7 +163,7 @@ check_deps() {
         warn "gst-inspect-1.0 no encontrado: no se puede verificar GStreamer (vídeos)."
     fi
     if [[ "$SC_DISPLAY" == scaled && "$SC_VIDEOS" == fit ]] && ! have ffmpeg; then
-        warn "Falta ffmpeg (sudo pacman -S ffmpeg): sin él los vídeos se verán estirados a lo ancho."
+        warn "Falta ffmpeg ($(pkg_hint ffmpeg)): sin él los vídeos se verán estirados a lo ancho."
     fi
     ok "Dependencias: $("$SC_WINE" --version 2>/dev/null)"
 }
@@ -227,11 +281,15 @@ create_prefix() {
         old=$(basename "$link"); old=${old%:}
         if [[ "$old" != "$L" && "$(readlink "$link")" == "$CD_DIR" ]]; then
             rm -f "$link"; wine_q reg delete 'HKLM\Software\Wine\Drives' /v "$old:" /f || true
+            wine_q reg delete 'HKLM\Software\Wine\Drives' /v "$old:" /f /reg:64 || true
             log "Quitado el mapeo anterior del CD en ${old^^}:"
         fi
     done
     ln -sfn "$CD_DIR" "$WINEPREFIX/dosdevices/$L:"
     wine_q reg add 'HKLM\Software\Wine\Drives' /v "$L:" /d cdrom /f
+    # También en la vista de 64 bits: con un Wine que no es WoW64 (Ubuntu/Debian), "wine reg" es el de 32
+    # bits y escribe en Wow6432Node, pero el tipo de unidad lo decide el mountmgr de 64 bits
+    wine_q reg add 'HKLM\Software\Wine\Drives' /v "$L:" /d cdrom /f /reg:64 || true
     # El juego no es Unicode y usa la página de códigos 1252 (español)
     wine_q reg add 'HKCU\Control Panel\International' /v Locale /d 00000c0a /f || true
     "$SC_WINE"server -w 2>/dev/null || wineserver -w
@@ -412,14 +470,16 @@ fit_res() {   # fit_res W H → imprime el tamaño admitido más parecido (misma
         if (( w >= 1024 && w <= 2560 && h >= 600 && h <= 1600 && w * h >= 1024 * 768 )); then
             echo "${w}x${h}"; return
         fi
-        (( w < 1024 )) && return
+        (( w < 1024 )) && return 0
     done
+    return 0
 }
 
 monitor_res() {   # resolución del monitor (o del escritorio virtual pedido con --vdesktop-res)
     local r=$SC_VDESKTOP_RES
-    [[ "$r" == auto ]] && r=$(xrandr --current 2>/dev/null | awk '/\*/{print $1; exit}')
+    [[ "$r" == auto ]] && r=$(xrandr --current 2>/dev/null | awk '/\*/{print $1; exit}' || true)
     [[ "$r" =~ ^[0-9]+x[0-9]+$ ]] && echo "$r"
+    return 0   # sin pantalla (SSH, contenedor): vacío, sin cortar la instalación
 }
 
 check_res() {   # valida --res antes de empezar a instalar
@@ -439,7 +499,8 @@ set_runtime_res() {   # --res WxH: modo 1024 del juego → WxH (scenh.ini [resol
         [[ "${NEW_SCENH_INI:-0}" == 1 && "$SC_DISPLAY" == scaled ]] || return 0
         local mon fit
         mon=$(monitor_res)
-        fit=$( [[ -n "$mon" ]] && fit_res "${mon%x*}" "${mon#*x}" )
+        fit=""
+        [[ -n "$mon" ]] && fit=$(fit_res "${mon%x*}" "${mon#*x}")
         if [[ -z "$fit" || "$fit" == 1024x768 ]]; then
             ok "Pantalla: 1024x768 (no se detectó un monitor compatible con la pantalla panorámica)"
             return
@@ -480,7 +541,7 @@ setup_runtime() {
     local dll
     dll=$(find_runtime_dll)
     if [[ -z "$dll" ]]; then
-        warn "No está scenh.dll (runtime/) ni MinGW para compilarla (pacman -S mingw-w64-gcc): se instala sin mejoras"
+        warn "No está scenh.dll (runtime/) ni MinGW para compilarla ($(pkg_hint mingw)): se instala sin mejoras"
         set_import_name GDI32.dll
         return
     fi
@@ -828,11 +889,11 @@ setup_videos() {
         return
     fi
     if ! have ffmpeg; then
-        warn "Sin ffmpeg los vídeos se verán estirados. Instalalo (sudo pacman -S ffmpeg): el lanzador los adaptará al arrancar."
+        warn "Sin ffmpeg los vídeos se verán estirados. Instalalo ($(pkg_hint ffmpeg)): el lanzador los adaptará al arrancar."
         return
     fi
     res=$SC_VDESKTOP_RES
-    [[ "$res" == auto ]] && res=$(xrandr --current 2>/dev/null | awk '/\*/{print $1; exit}')
+    [[ "$res" == auto ]] && res=$(xrandr --current 2>/dev/null | awk '/\*/{print $1; exit}' || true)
     if [[ ! "$res" =~ ^[0-9]+x[0-9]+$ ]]; then
         log "No se pudo detectar la resolución: los vídeos se adaptarán al arrancar el juego."
         return
@@ -864,7 +925,7 @@ if [[ "\$SC_VDESKTOP_RES" == auto ]]; then
     if [[ "\$SC_DISPLAY" == scaled ]]; then
         # Resolución del monitor principal (XWayland/X11); el escritorio virtual de Wine
         # del mismo tamaño que la pantalla se muestra a pantalla completa.
-        SC_VDESKTOP_RES=\$(xrandr --current 2>/dev/null | awk '/\*/{print \$1; exit}')
+        SC_VDESKTOP_RES=\$(xrandr --current 2>/dev/null | awk '/\*/{print \$1; exit}' || true)
         [[ "\$SC_VDESKTOP_RES" =~ ^[0-9]+x[0-9]+\$ ]] || SC_VDESKTOP_RES=1920x1080
     else
         SC_VDESKTOP_RES=1024x768
@@ -895,16 +956,19 @@ else
     ln -sfn "$CD_DIR" "\$CD_LINK"
 fi
 cd "$GAME_DIR" || exit 1
-# SC.EXE detecta el CD virtual, escribe CDSC.INS y lanza CLASH.EXE.
-# Ruta completa obligatoria: dentro de explorer, "SC.EXE" a secas resuelve al
-# sc.exe de sistema (control de servicios) en vez del lanzador del juego.
+# Se hace lo que haría SC.EXE (el lanzador original): escribir en CDSC.INS la raíz del CD virtual y abrir
+# CLASH.EXE, que el parche P1 deja arrancar sin SC.EXE (igual que el lanzador de Windows). SC.EXE espera
+# en un diálogo modal de MFC que se cierra con EndDialog al encontrar el CD; con el Wine 9 de Ubuntu ese
+# EndDialog falla y el juego no se abre (INSTALADORES §7 nº 26). Sin los parches (--no-patch) se usa SC.EXE.
+# Ruta completa obligatoria: dentro de explorer, "SC.EXE" a secas resuelve al sc.exe de sistema.
+printf '%s' '${SC_CD_LETTER^^}:\' > "$GAME_DIR/CDSC.INS"
 cmd=("\$SC_WINE")
 if [[ "\$SC_VDESKTOP" == 1 ]]; then
     # Escritorio virtual: evita que la ventana a pantalla completa se minimice
     # al perder el foco tras los vídeos, y no cambia la resolución del monitor.
     cmd+=(explorer "/desktop=SpaceClash,\$SC_VDESKTOP_RES")
 fi
-cmd+=('C:\SCLASH\SC.EXE' "\$@")
+cmd+=('$( [[ "$SC_PATCH" == 1 ]] && echo 'C:\SCLASH\CLASH.EXE' || echo 'C:\SCLASH\SC.EXE' )' "\$@")
 # gamescope: alternativa NO verificada para escalar el modo "window" (requiere: pacman -S gamescope)
 if [[ "\$SC_GAMESCOPE" == 1 ]] && command -v gamescope >/dev/null; then
     cmd=(gamescope -w 640 -h 480 -f -S fit -- "\${cmd[@]}")
@@ -913,7 +977,7 @@ echo "=== \$(date '+%F %T') \${cmd[*]}\$( ((NOVID)) && echo ' (sin vídeos)')" >
 ((NOVID)) || exec "\${cmd[@]}" >>"$LOG_DIR/wine.log" 2>&1
 "\${cmd[@]}" >>"$LOG_DIR/wine.log" 2>&1
 rc=\$?
-# Esperar a que terminen todos los procesos del prefijo (SC.EXE → CLASH.EXE → SPACE.EXE) y volver al CD completo
+# Esperar a que terminen todos los procesos del prefijo (CLASH.EXE → SPACE.EXE) y volver al CD completo
 ws="\${SC_WINE%wine}wineserver"; command -v "\$ws" >/dev/null || ws=wineserver
 "\$ws" -w
 ln -sfn "$CD_DIR" "\$CD_LINK"
@@ -925,6 +989,8 @@ EOF
         mkdir -p "$(dirname "$DESKTOP_FILE")" "$(dirname "$ICON_FILE")"
         if have magick; then
             magick "$GAME_DIR/ICON.ICO[0]" -resize 48x48 "$ICON_FILE" 2>/dev/null || true
+        elif have convert; then   # ImageMagick 6 (Ubuntu/Debian)
+            convert "$GAME_DIR/ICON.ICO[0]" -resize 48x48 "$ICON_FILE" 2>/dev/null || true
         fi
         cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
@@ -1124,7 +1190,7 @@ Opciones (o variables de entorno equivalentes):
                                                           (SC_VIDEOS_AI, def: ask)
                       También: python3 tools/upscale-videos.py --root DIR (en cualquier momento)
   --no-desktop        No crear acceso directo .desktop    (SC_DESKTOP=0)
-  --install-deps      Instala dependencias con pacman si faltan
+  --install-deps      Instala dependencias si faltan (pacman en Arch/CachyOS, apt en Ubuntu/Debian)
   --skip-hash         No verificar SHA-256 de la imagen
   --force             Rehace ISO, extracción y configuración aunque existan
   --no-backup         uninstall: no copiar las partidas antes de borrar

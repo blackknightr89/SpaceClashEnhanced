@@ -1,7 +1,7 @@
 # Space Clash Enhanced
 
 Instaladores para jugar **Space Clash: The Last Frontier** (Dinamic Multimedia / Enigma Software, 1999)
-en computadoras actuales: **Linux** (CachyOS / Arch) y **Windows 10 / 11**.
+en computadoras actuales: **Linux** (CachyOS / Arch, Ubuntu / Debian) y **Windows 10 / 11**.
 
 - Pantalla completa en 4:3, escalada y centrada en monitores modernos (1080p, 1440p…).
 - Vídeos de introducción y finales a pantalla completa sin deformar (el instalador lo pregunta).
@@ -64,15 +64,22 @@ el triple de área que a 1024×768.
 > Estado: el instalador de Windows fue probado en profundidad, pero **todavía no en un Windows real**.
 > Si algo falla, abrí un *issue* (ver [Problemas](#problemas)).
 
-## Instalar en Linux (CachyOS / Arch)
+## Instalar en Linux
 
 1. Comprobá que la imagen del juego esté en `SpaceClashEnhanced/disk`.
 2. Abrí una terminal **dentro de la carpeta `SpaceClashEnhanced`** (en Dolphin: clic derecho en un
-   espacio vacío → *Abrir terminal aquí*).
-3. Instalá lo necesario (una sola vez; pide tu contraseña):
-   ```bash
-   sudo pacman -S --needed wine 7zip python unzip curl imagemagick ffmpeg gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-   ```
+   espacio vacío → *Abrir terminal aquí*; en Archivos de GNOME: clic derecho → *Abrir en una terminal*).
+3. Instalá lo necesario (una sola vez; pide tu contraseña). Según tu distribución:
+   - **CachyOS / Arch:**
+     ```bash
+     sudo pacman -S --needed wine 7zip python unzip curl imagemagick ffmpeg gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+     ```
+   - **Ubuntu 24.04 / Debian** (el juego es de 32 bits y el Wine de Ubuntu necesita los paquetes `:i386`):
+     ```bash
+     sudo dpkg --add-architecture i386 && sudo apt update
+     sudo apt install wine wine64 wine32:i386 7zip python3 unzip curl imagemagick ffmpeg x11-xserver-utils gstreamer1.0-plugins-base:i386 gstreamer1.0-plugins-good:i386 gstreamer1.0-plugins-bad:i386 gstreamer1.0-plugins-ugly:i386 gstreamer1.0-libav:i386
+     ```
+   - O dejá que lo haga el instalador: en el paso siguiente usá `bash install-spaceclash.sh install --install-deps`.
 4. Instalá el juego:
    ```bash
    bash install-spaceclash.sh install
@@ -82,8 +89,10 @@ el triple de área que a 1024×768.
    bash install-spaceclash.sh run
    ```
 
-Otras distribuciones: debería funcionar si instalás los paquetes equivalentes (Wine ≥ 9, 7-Zip, Python 3,
-unzip, curl, ffmpeg y los plugins de GStreamer), pero solo se probó en CachyOS.
+Probado en **CachyOS** (máquina real) y en **Ubuntu 24.04** (instalación, vídeos, partida y mapa estelar,
+en un entorno de prueba sin escritorio; todavía no en un Ubuntu con escritorio). Otras distribuciones:
+debería funcionar si instalás los paquetes equivalentes (Wine ≥ 9 con soporte de 32 bits, 7-Zip, Python 3,
+unzip, curl, ffmpeg y los plugins de GStreamer).
 
 ---
 
@@ -228,6 +237,8 @@ restaurarla. Si no querés la copia: `--no-backup` (Linux) o `-NoBackup` (Window
    | Aparece en el otro monitor | Movelo con Win/Meta + Shift + flecha |
    | *"la ejecución de scripts está deshabilitada"* (Windows) | Usá `install-spaceclash.cmd`, no el `.ps1` directamente |
    | Aviso de DirectPlay (Windows) | Aceptá instalarlo: el juego lo necesita |
+   | El juego se cierra apenas arranca (Wine informa un error en `00414D6D`) | El juego necesita un dispositivo de sonido. Comprobá que el sonido de tu sistema funcione (PipeWire o PulseAudio) |
+   | Ubuntu: *"Introduce el CD en la unidad"* o el juego no llega a abrirse | Actualizá a la última versión de este proyecto y volvé a ejecutar el instalador |
 
 3. Si no se resuelve, abrí un **issue** en este repositorio con la salida del diagnóstico y, si el juego
    se colgó, el informe de error. En Linux, Wine ofrece guardarlo como `backtrace.txt` en el Escritorio;
@@ -253,29 +264,32 @@ bytes originales y el hash SHA-256 antes y después de aplicarse.
 
 ## Estado
 
-| | Linux (CachyOS, Wine 11) | Windows 10/11 |
-|---|---|---|
-| Instalación | ✅ probado | ✅ probado fuera de Windows · ⏳ falta probar en Windows real |
-| Vídeos, menú, campaña planetaria y espacial | ✅ | ⏳ |
-| Pantalla completa escalada 4:3 | ✅ | ⏳ |
-| Vídeos a pantalla completa en 4:3 (se pregunta al instalar) | ✅ | ⏳ |
-| Vídeos escalados con IA (opcional) | ✅ | ⏳ |
-| Guardar/cargar | ✅ | ⏳ |
-| Velocidad con +/− y menos CPU (`scenh.dll`) | ✅ | ⏳ |
-| Pantalla panorámica (experimental, por defecto; `--res off` la quita) | 🟡 | ⏳ |
-| Multijugador LAN | ⏳ | ⏳ |
+| | CachyOS (Wine 11) | Ubuntu 24.04 (Wine 9) | Windows 10/11 |
+|---|---|---|---|
+| Instalación | ✅ | ✅ ¹ | ✅ probado fuera de Windows · ⏳ falta en Windows real |
+| Vídeos, menú, campaña planetaria y espacial | ✅ | ✅ ¹ | ⏳ |
+| Pantalla completa escalada 4:3 | ✅ | ✅ ¹ | ⏳ |
+| Vídeos a pantalla completa en 4:3 (se pregunta al instalar) | ✅ | ✅ ¹ | ⏳ |
+| Vídeos escalados con IA (opcional) | ✅ | ⏳ | ⏳ |
+| Guardar/cargar | ✅ | 🟡 ¹ (cargar) | ⏳ |
+| Velocidad, zoom y menos CPU (`scenh.dll`) | ✅ | ✅ ¹ | ⏳ |
+| Pantalla panorámica (experimental, por defecto; `--res off` la quita) | 🟡 | 🟡 ¹ | ⏳ |
+| Multijugador LAN | ⏳ | ⏳ | ⏳ |
+
+¹ Probado en un entorno de prueba de Ubuntu 24.04 sin escritorio (pantalla virtual), todavía no en un
+Ubuntu con escritorio.
 
 ## Próximos pasos
 
 Lo que viene, en orden. Se actualiza con cada versión.
 
-1. **Ubuntu.** Instalador con los paquetes de Ubuntu (`apt`) y sus instrucciones en este README, probado en
-   Ubuntu 24.04.
-2. **Windows al día.** Revisar que el instalador de Windows tenga todo lo de las últimas versiones (se
+Recién hecho (próxima versión): **Ubuntu / Debian**, con instrucciones en este README.
+
+1. **Windows al día.** Revisar que el instalador de Windows tenga todo lo de las últimas versiones (se
    sigue probando fuera de Windows hasta que alguien lo pruebe en un Windows real).
-3. **Guardado y carga rápidos con una tecla** (además del autoguardado).
-4. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
-5. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
+2. **Guardado y carga rápidos con una tecla** (además del autoguardado).
+3. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
+4. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
    opcional: el instalador lo va a preguntar y se conservan los originales.
 
 Más adelante, sin fecha: los parches del juego aplicados en memoria (sin modificar los `.EXE`), música
