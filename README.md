@@ -308,11 +308,9 @@ Ubuntu con escritorio.
 
 Lo que viene, en orden. Se actualiza con cada versión.
 
-Recién hecho (próxima versión): **guardado y carga rápidos** con F12 y Ctrl+F12, la **cámara con las
-flechas** del teclado y la **reinstalación completa** (`reinstall-spaceclash.cmd` /
-`reinstall-spaceclash.sh`), que vuelve a detectar el monitor; en Windows se corrigió la detección de la
-resolución. En **v1.8**: Ubuntu /
-Debian y el instalador de Windows al día.
+Recién hecho en **v1.9**: **guardado y carga rápidos** con F12 y Ctrl+F12, la **cámara con las flechas**
+del teclado y la **reinstalación completa** (`reinstall-spaceclash.cmd` / `reinstall-spaceclash.sh`), que
+vuelve a detectar el monitor; en Windows se corrigió la detección de la resolución.
 
 1. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
    opcional: el instalador lo va a preguntar y se conservan los originales.
