@@ -51,7 +51,7 @@ static LRESULT CALLBACK hk_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
     import_hooks_refresh();
     groups_on_message(msg, wp, lp);
-    if (speed_on_key(h, msg, wp) || zoom_on_message(msg, wp))
+    if (speed_on_key(h, msg, wp) || zoom_on_message(msg, wp) || quicksave_on_message(msg, wp, lp))
         return 0;
     lp = zoom_translate_mouse(msg, lp);   /* zoom por software: ratón al tamaño lógico */
     return CallWindowProcA(g_game_wndproc, h, msg, wp, lp);

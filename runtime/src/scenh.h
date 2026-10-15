@@ -71,6 +71,7 @@ int  hud_offset(int screen_w);
 /* autosave.c */
 void autosave_init(void);
 void autosave_poll(void);
+int  quicksave_on_message(UINT msg, WPARAM wp, LPARAM lp);
 
 /* groups.c */
 void groups_init(void);

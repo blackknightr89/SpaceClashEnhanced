@@ -136,6 +136,9 @@ en memoria, sin cambiar la lógica del juego:
   alrededor de un segundo. Al ir del mapa estelar a una misión, el negro baja de unos 2,5 s a menos de 1 s.
 - **Autoguardado al empezar cada misión** (cuando cerrás los objetivos), en la última ranura de la lista
   (aparece como "AUTO - …"). Si ahí tenés una partida tuya, no la pisa.
+- **Guardado y carga rápidos:** **F12** guarda y **Ctrl+F12** carga, en la parte planetaria y en el mapa
+  estelar (también en pausa; no con una ventana abierta ni en multijugador). Usa la novena ranura de la
+  lista (aparece como "RAPIDA - …") y tampoco pisa una partida tuya.
 - **Grupos de selección:** Ctrl+0–9 guarda la selección y 0–9 la recupera (en la parte planetaria ya
   existía; ahora también con las naves del mapa estelar). Pulsando dos veces el número, la cámara va al
   grupo.
@@ -285,12 +288,11 @@ Ubuntu con escritorio.
 
 Lo que viene, en orden. Se actualiza con cada versión.
 
-Recién hecho en **v1.8**: **Ubuntu / Debian**, con instrucciones en este README, y el instalador de
-Windows al día con todo lo anterior.
+Recién hecho (próxima versión): **guardado y carga rápidos** con F12 y Ctrl+F12. En **v1.8**: Ubuntu /
+Debian y el instalador de Windows al día.
 
-1. **Guardado y carga rápidos con una tecla** (además del autoguardado).
-2. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
-3. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
+1. **Desplazamiento con el teclado y los bordes de la pantalla** revisado en la pantalla panorámica.
+2. **Efectos y voces más limpios:** efectos de sonido con más calidad y voces con menos ruido. Será
    opcional: el instalador lo va a preguntar y se conservan los originales.
 
 Más adelante, sin fecha: los parches del juego aplicados en memoria (sin modificar los `.EXE`), música
