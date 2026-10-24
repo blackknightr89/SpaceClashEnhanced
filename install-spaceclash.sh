@@ -41,6 +41,7 @@ SC_VIDEOS="${SC_VIDEOS:-ask}"                           # ask (preguntar; al rei
 SC_VIDEOS_AI="${SC_VIDEOS_AI:-ask}"                     # ask (preguntar, def. no) | off | general | general-sharp | x4plus: vídeos con IA
 SC_PYTHON="${SC_PYTHON:-}"                              # Python con torch + spandrel (vacío = buscarlo; ver setup_videos_ai)
 SC_DESKTOP="${SC_DESKTOP:-1}"                           # 1 = crear acceso directo .desktop
+SC_STEAM="${SC_STEAM:-1}"                               # 1 = agregar a la biblioteca de Steam (si está instalado)
 SC_CD_LETTER="${SC_CD_LETTER:-r}"                       # letra del CD virtual (R:; S:/T: las reserva Proton)
 SC_CNC_URL="${SC_CNC_URL:-https://github.com/FunkyFr3sh/cnc-ddraw/releases/download/v7.1.0.0/cnc-ddraw.zip}"
 
@@ -1021,6 +1022,194 @@ EOF
 }
 
 # --------------------------------------------------------------------------- #
+#  8. Biblioteca de Steam (juego que no es de Steam, con portada, cabecera e icono)
+# --------------------------------------------------------------------------- #
+#  Steam guarda los juegos agregados a mano en userdata/<cuenta>/config/shortcuts.vdf (VDF binario) y
+#  sus imágenes en config/grid/<appid>{p,,_hero}.png. Lee el archivo al arrancar y lo reescribe al
+#  cerrarse, así que hay que editarlo con Steam cerrado. Se agregan dos entradas (normal y «sin
+#  vídeos»); si ya existen (también las agregadas a mano: el mismo lanzador) se actualizan sin cambiar
+#  el appid, así se conservan las horas jugadas y las colecciones. Las imágenes salen del propio CD:
+#  PORTADA.PCX (portada y cápsula ancha), FONDO.PCX (cabecera) e ICON.ICO. No se usa Proton: el
+#  lanzador ya ejecuta Wine. Steam de Flatpak no puede ejecutar el Wine del sistema y se omite.
+STEAM_ART="$SC_ROOT/steam"
+
+steam_dirs() {   # imprime los config/ de cada cuenta de Steam (nativo)
+    local root d
+    for root in "$HOME/.local/share/Steam" "$HOME/.steam/steam"; do
+        [[ -d "$root/userdata" ]] && break
+    done
+    [[ -d "$root/userdata" ]] || return 0
+    for d in "$root"/userdata/*/; do
+        if [[ "$(basename "$d")" =~ ^[1-9][0-9]*$ ]]; then echo "${d}config"; fi
+    done
+}
+
+steam_running() { pgrep -x steam >/dev/null 2>&1; }
+
+steam_close() {   # cierra Steam (preguntando) o devuelve 1
+    steam_running || return 0
+    if [[ ! -t 0 ]]; then
+        warn "Steam está abierto: no se agregó el juego a la biblioteca. Cerralo y ejecutá: $0 steam"
+        return 1
+    fi
+    local a
+    read -r -p "    Steam está abierto y hay que cerrarlo para agregar el juego. ¿Cerrarlo ahora? [S/n] " a || a=""
+    if [[ "$a" =~ ^[nN]$ ]]; then
+        warn "No se agregó el juego a Steam. Para hacerlo más tarde, con Steam cerrado: $0 steam"
+        return 1
+    fi
+    if have steam; then steam -shutdown >/dev/null 2>&1 & else xdg-open steam://exit >/dev/null 2>&1 & fi
+    local i
+    for ((i = 0; i < 60; i++)); do steam_running || return 0; sleep 0.5; done
+    warn "Steam no se cerró a tiempo. Cerralo y ejecutá: $0 steam"
+    return 1
+}
+
+steam_art() {   # genera las imágenes en $STEAM_ART (sin ImageMagick, Steam usa las suyas)
+    local im
+    if have magick; then im=magick; elif have convert; then im=convert; else return 0; fi
+    local P="$CD_DIR/IMG/PORTADA.PCX"
+    mkdir -p "$STEAM_ART"
+    [[ -f "$P" ]] && {
+        # Portada 600x900: la ilustración 4:3 sobre una versión desenfocada, con los bordes fundidos
+        $im "$P" -resize 600x900^ -gravity center -extent 600x900 -blur 0x18 -modulate 55 \
+            \( "$P" -resize 600x \( -size 600x450 xc:white -size 600x70 gradient:black-white -gravity north -composite \
+                                    -size 600x70 gradient:white-black -gravity south -composite \) \
+               -alpha off -compose CopyOpacity -composite \) \
+            -compose over -gravity center -geometry +0-60 -composite "$STEAM_ART/portrait.png"
+        $im "$P" -resize 920x -gravity north -extent 920x430 "$STEAM_ART/wide.png"
+    } 2>/dev/null || true
+    [[ -f "$CD_DIR/IMG/FONDO.PCX" ]] && \
+        $im "$CD_DIR/IMG/FONDO.PCX" -resize 1920x -gravity north -crop 1920x620+0+120 +repage "$STEAM_ART/hero.png" 2>/dev/null || true
+    [[ -f "$GAME_DIR/ICON.ICO" ]] && \
+        $im "$GAME_DIR/ICON.ICO[0]" -filter point -resize 256x256 "$STEAM_ART/icon.png" 2>/dev/null || true
+}
+
+# steam_vdf add|remove|list ARCHIVO → edita shortcuts.vdf; imprime "appid_sin_signo clave" de cada entrada
+steam_vdf() {
+    python3 - "$@" "$LAUNCHER" "$SC_ROOT" "$STEAM_ART/icon.png" "$DESKTOP_FILE" "$DESKTOP_FILE_NV" <<'PY'
+import os, struct, sys, zlib
+mode, path, launcher, root, icon, desk, desk_nv = sys.argv[1:8]
+
+def parse(d, i):                        # mapa VDF binario → lista de (tipo, clave, valor), índice
+    out = []
+    while True:
+        t = d[i]; i += 1
+        if t == 8:
+            return out, i
+        j = d.index(b'\0', i); k = d[i:j].decode('utf-8', 'surrogateescape'); i = j + 1
+        if t == 0:   v, i = parse(d, i)
+        elif t == 1: j = d.index(b'\0', i); v = d[i:j].decode('utf-8', 'surrogateescape'); i = j + 1
+        elif t == 2: v = struct.unpack_from('<i', d, i)[0]; i += 4
+        elif t == 7: v = struct.unpack_from('<Q', d, i)[0]; i += 8
+        else: raise SystemExit(f'shortcuts.vdf: tipo {t} desconocido')
+        out.append((t, k, v))
+
+def dump(m):
+    b = bytearray()
+    for t, k, v in m:
+        b += bytes([t]) + k.encode('utf-8', 'surrogateescape') + b'\0'
+        if t == 0:   b += dump(v) + b'\x08'
+        elif t == 1: b += v.encode('utf-8', 'surrogateescape') + b'\0'
+        elif t == 2: b += struct.pack('<i', v)
+        elif t == 7: b += struct.pack('<Q', v)
+    return bytes(b)
+
+get = lambda m, k, dflt=None: next((v for _, kk, v in m if kk.lower() == k.lower()), dflt)
+def put(m, t, k, v):
+    for n, (_, kk, _) in enumerate(m):
+        if kk.lower() == k.lower():
+            m[n] = (t, kk, v); return
+    m.append((t, k, v))
+
+top = [(0, 'shortcuts', [])]
+if os.path.exists(path) and os.path.getsize(path):
+    top, _ = parse(open(path, 'rb').read(), 0)
+shortcuts = get(top, 'shortcuts')
+if shortcuts is None:
+    shortcuts = []; top.append((0, 'shortcuts', shortcuts))
+
+def key(e):                             # 'normal' | 'sin-videos' | None (otro juego)
+    if get(e, 'Exe', '').strip('"') != launcher:
+        return None
+    return 'sin-videos' if '--sin-videos' in get(e, 'LaunchOptions', '') else 'normal'
+
+entries = [v for _, _, v in shortcuts]
+if mode == 'add':
+    specs = {'normal': ('Space Clash: The Last Frontier', '', desk),
+             'sin-videos': ('Space Clash (sin vídeos)', '--sin-videos', desk_nv)}
+    for k, (name, opts, sc) in specs.items():
+        e = next((e for e in entries if key(e) == k), None)
+        if e is None:
+            exe = f'"{launcher}"'
+            appid = (zlib.crc32((exe + name).encode()) | 0x80000000) - (1 << 32)   # estable; bit alto = no es de Steam
+            e = [(2, 'appid', appid), (1, 'appname', name), (1, 'Exe', exe), (1, 'StartDir', ''),
+                 (1, 'icon', ''), (1, 'ShortcutPath', ''), (1, 'LaunchOptions', ''), (2, 'IsHidden', 0),
+                 (2, 'AllowDesktopConfig', 1), (2, 'AllowOverlay', 1), (2, 'OpenVR', 0), (2, 'Devkit', 0),
+                 (1, 'DevkitGameID', ''), (2, 'DevkitOverrideAppID', 0), (2, 'LastPlayTime', 0),
+                 (1, 'FlatpakAppID', ''), (1, 'sortas', ''), (0, 'tags', [])]
+            entries.append(e)
+        put(e, 1, 'appname', name)
+        put(e, 1, 'StartDir', f'"{root}/"')
+        put(e, 1, 'icon', icon if os.path.exists(icon) else '')
+        put(e, 1, 'ShortcutPath', sc if os.path.exists(sc) else '')
+        put(e, 1, 'LaunchOptions', opts)
+elif mode == 'remove':
+    entries = [e for e in entries if key(e) is None]
+for e in entries:
+    if key(e) and mode != 'remove':
+        print(get(e, 'appid') & 0xffffffff, key(e))
+if mode != 'list':
+    shortcuts[:] = [(0, str(n), e) for n, e in enumerate(entries)]
+    with open(path + '.tmp', 'wb') as f:
+        f.write(dump(top) + b'\x08')
+    os.replace(path + '.tmp', path)
+PY
+}
+
+setup_steam() {
+    [[ "$SC_STEAM" == 1 ]] || return 0
+    local dirs; dirs=$(steam_dirs)
+    if [[ -z "$dirs" ]]; then
+        [[ -d "$HOME/.var/app/com.valvesoftware.Steam" ]] \
+            && warn "Steam de Flatpak no puede ejecutar el Wine del sistema: no se agregó el juego a la biblioteca."
+        return 0
+    fi
+    log "Agregando el juego a la biblioteca de Steam…"
+    steam_close || return 0
+    steam_art
+    local cfg ids id k n=0
+    art() { [[ -f "$STEAM_ART/$1.png" ]] && cp "$STEAM_ART/$1.png" "$cfg/grid/$id$2.png" || true; }
+    while read -r cfg; do
+        [[ -f "$cfg/shortcuts.vdf" && ! -f "$cfg/shortcuts.vdf.antes-spaceclash" ]] \
+            && cp -p "$cfg/shortcuts.vdf" "$cfg/shortcuts.vdf.antes-spaceclash"
+        ids=$(steam_vdf add "$cfg/shortcuts.vdf") || { warn "No pude editar $cfg/shortcuts.vdf"; continue; }
+        mkdir -p "$cfg/grid"
+        while read -r id k; do
+            art portrait p; art wide ""; art hero _hero   # portada, cápsula ancha, cabecera
+        done <<<"$ids"
+        ((++n))
+    done <<<"$dirs"
+    ((n)) && ok "En la biblioteca de Steam: «Space Clash: The Last Frontier» y «Space Clash (sin vídeos)» ($n cuenta(s))" || true
+}
+
+remove_steam() {
+    local cfg ids id k n=0
+    while read -r cfg; do
+        [[ -f "$cfg/shortcuts.vdf" ]] || continue
+        ids=$(steam_vdf list "$cfg/shortcuts.vdf" 2>/dev/null) || continue
+        [[ -n "$ids" ]] || continue
+        if steam_running; then
+            warn "Steam está abierto: quitá «Space Clash» de la biblioteca a mano (o cerralo y volvé a desinstalar)."
+            return 0
+        fi
+        while read -r id k; do rm -f "$cfg/grid/$id"{p,,_hero}.png; done <<<"$ids"
+        steam_vdf remove "$cfg/shortcuts.vdf" && ((++n)) || warn "No pude editar $cfg/shortcuts.vdf"
+    done < <(steam_dirs)
+    ((n)) && ok "Quitado de la biblioteca de Steam" || true
+}
+
+# --------------------------------------------------------------------------- #
 #  Subcomandos
 # --------------------------------------------------------------------------- #
 cmd_install() {
@@ -1051,6 +1240,7 @@ cmd_install() {
     setup_videos_ai
     setup_videos
     create_launcher
+    setup_steam
     echo
     ok "Instalación completa."
     echo "   Ejecutar:   $LAUNCHER"
@@ -1072,6 +1262,12 @@ cmd_reinstall() {
         warn "No encontré la imagen del CD: se conserva el CD ya extraído en $CD_DIR"
     fi
     cmd_install
+}
+
+cmd_steam() {
+    [[ -x "$LAUNCHER" ]] || die "No está instalado. Ejecutá: $0 install"
+    [[ -n "$(steam_dirs)" ]] || die "No encontré Steam (se busca en ~/.local/share/Steam; el de Flatpak no sirve)"
+    SC_STEAM=1 setup_steam
 }
 
 cmd_run() {
@@ -1141,6 +1337,13 @@ cmd_doctor() {
         chk "GStreamer mpegpsdemux"                "gst-inspect-1.0 mpegpsdemux >/dev/null 2>&1"
         chk "GStreamer decodificador MPEG-1"       "gst-inspect-1.0 avdec_mpeg2video >/dev/null 2>&1 || gst-inspect-1.0 mpeg2dec >/dev/null 2>&1"
     fi
+    if [[ -n "$(steam_dirs)" ]]; then
+        if steam_dirs | while read -r c; do steam_vdf list "$c/shortcuts.vdf" 2>/dev/null; done | grep -q .; then
+            echo "    En la biblioteca de Steam"
+        else
+            echo "    No está en la biblioteca de Steam (con Steam cerrado: $0 steam)"
+        fi
+    fi
     return $rc
 }
 
@@ -1163,6 +1366,7 @@ cmd_uninstall() {
         mkdir -p "$backup" && cp -p "${saves[@]}" "$backup/" || die "No pude copiar las partidas a $backup; no se borró nada."
         ok "Partidas copiadas a $backup (para recuperarlas, copialas a $GAME_DIR después de instalar)"
     fi
+    remove_steam
     rm -rf "$SC_ROOT" "$DESKTOP_FILE" "$DESKTOP_FILE_NV" "$ICON_FILE"
     ok "Desinstalado."
 }
@@ -1178,6 +1382,8 @@ Comandos:
                (detecta otra vez la resolución del monitor, scenh.ini de cero, pregunta por los vídeos).
                Conserva las partidas; las opciones anteriores del runtime quedan en scenh.ini.anterior
   run          Ejecuta el juego
+  steam        Agrega el juego a la biblioteca de Steam, con portada e icono (install ya lo hace;
+               hay que cerrar Steam, el instalador ofrece cerrarlo)
   doctor       Diagnostica la instalación
   uninstall    Borra todo lo instalado (pide confirmación; antes copia las partidas)
   help         Esta ayuda
@@ -1221,6 +1427,7 @@ Opciones (o variables de entorno equivalentes):
                                                           (SC_VIDEOS_AI, def: ask)
                       También: python3 tools/upscale-videos.py --root DIR (en cualquier momento)
   --no-desktop        No crear acceso directo .desktop    (SC_DESKTOP=0)
+  --no-steam          No agregar el juego a Steam         (SC_STEAM=0)
   --install-deps      Instala dependencias si faltan (pacman en Arch/CachyOS, apt en Ubuntu/Debian)
   --skip-hash         No verificar SHA-256 de la imagen
   --force             Rehace ISO, extracción y configuración aunque existan
@@ -1254,6 +1461,7 @@ while (($#)); do
         --videos)       SC_VIDEOS=$2; shift ;;
         --videos-ai)    SC_VIDEOS_AI=$2; shift ;;
         --no-desktop)   SC_DESKTOP=0 ;;
+        --no-steam)     SC_STEAM=0 ;;
         --install-deps) INSTALL_DEPS=1 ;;
         --skip-hash)    SKIP_HASH=1 ;;
         --force)        FORCE=1 ;;
@@ -1266,11 +1474,13 @@ done
 ISO_PATH="$SC_ROOT/media/SPACE_CLASH.iso"; CD_DIR="$SC_ROOT/cd"
 export WINEPREFIX="$SC_ROOT/prefix"; GAME_DIR="$WINEPREFIX/drive_c/SCLASH"
 LAUNCHER="$SC_ROOT/spaceclash.sh"; LOG_DIR="$SC_ROOT/logs"; NOVID_DIR="$SC_ROOT/cd-sin-videos"
+STEAM_ART="$SC_ROOT/steam"
 
 case "$CMD" in
     install)   cmd_install ;;
     reinstall) cmd_reinstall ;;
     run)       cmd_run "$@" ;;
+    steam)     cmd_steam ;;
     doctor)    cmd_doctor ;;
     uninstall) cmd_uninstall ;;
     help|-h|--help) usage ;;

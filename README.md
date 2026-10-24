@@ -91,6 +91,13 @@ el triple de área que a 1024×768.
    bash install-spaceclash.sh run
    ```
 
+**Steam (Linux):** si tenés Steam instalado, el instalador también agrega el juego a tu biblioteca, con
+portada, cabecera e icono sacados del propio CD: **"Space Clash: The Last Frontier"** y **"Space Clash (sin
+vídeos)"**. Steam tiene que estar cerrado mientras tanto; si está abierto, el instalador ofrece cerrarlo.
+Si lo habías agregado a mano, se actualiza esa misma entrada (se conservan las horas jugadas). Para
+hacerlo más tarde: `bash install-spaceclash.sh steam`; para no agregarlo: `--no-steam`. No hace falta
+activar Proton: el juego ya usa Wine. El Steam de Flatpak no puede ejecutar el Wine del sistema y se omite.
+
 Probado en **CachyOS** (máquina real) y en **Ubuntu 24.04** (instalación, vídeos, partida y mapa estelar,
 en un entorno de prueba sin escritorio; todavía no en un Ubuntu con escritorio). Otras distribuciones:
 debería funcionar si instalás los paquetes equivalentes (Wine ≥ 9 con soporte de 32 bits, 7-Zip, Python 3,
@@ -243,7 +250,7 @@ vuelve a extraer; si no, se usa la copia ya instalada. Acepta las mismas opcione
 
 Antes de borrar, el desinstalador **copia tus partidas** (y las opciones del juego) a una carpeta junto a
 la instalación: `~/Games/space-clash-partidas-<fecha>` en Linux, `%USERPROFILE%\Games\SpaceClash-partidas-<fecha>`
-en Windows. Si después volvés a instalar, el instalador encuentra la copia más reciente y te ofrece
+en Windows. En Linux también lo quita de la biblioteca de Steam. Si después volvés a instalar, el instalador encuentra la copia más reciente y te ofrece
 restaurarla. Si no querés la copia: `--no-backup` (Linux) o `-NoBackup` (Windows).
 
 ## Problemas
